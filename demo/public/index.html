@@ -6,73 +6,214 @@
 <title>Holdback Gallery</title>
 <style>
   :root {
-    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1b16; --muted: #6b665c; --line: #e4dfd4;
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1b16; --muted: #6b665c; --line: #e4dfd4; --soft: #f1eee6;
     --held: #b7791f; --held-bg: #fdf3e1; --cap: #2f7d4f; --cap-bg: #e5f4ea; --ref: #5b6b8c; --ref-bg: #e9edf5;
-    --accent: #1d1b16;
+    --accent: #1d1b16; --on-accent: #f6f4ef; --err: #b42318; --err-bg: #fdecea; --sel: #b7791f;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #15140f; --panel: #1f1d17; --ink: #f1ede4; --muted: #a39d90; --line: #34312a;
-      --held: #f0b75a; --held-bg: #3a2e18; --cap: #6fd39a; --cap-bg: #183224; --ref: #a9b7d6; --ref-bg: #232a3a; --accent: #f1ede4; }
+    :root:not([data-theme="light"]) { --bg: #15140f; --panel: #1f1d17; --ink: #f1ede4; --muted: #a39d90; --line: #34312a; --soft: #29271f;
+      --held: #f0b75a; --held-bg: #3a2e18; --cap: #6fd39a; --cap-bg: #183224; --ref: #a9b7d6; --ref-bg: #232a3a;
+      --accent: #f1ede4; --on-accent: #15140f; --err: #ff9b8f; --err-bg: #3a1c18; --sel: #f0b75a; color-scheme: dark; }
   }
+  :root[data-theme="dark"] { --bg: #15140f; --panel: #1f1d17; --ink: #f1ede4; --muted: #a39d90; --line: #34312a; --soft: #29271f;
+    --held: #f0b75a; --held-bg: #3a2e18; --cap: #6fd39a; --cap-bg: #183224; --ref: #a9b7d6; --ref-bg: #232a3a;
+    --accent: #f1ede4; --on-accent: #15140f; --err: #ff9b8f; --err-bg: #3a1c18; --sel: #f0b75a; color-scheme: dark; }
   * { box-sizing: border-box; }
+  html, body { overflow-x: hidden; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { padding: 22px 24px 14px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; }
+  a { color: inherit; }
+  button, input { font: inherit; color: inherit; }
+  .muted { color: var(--muted); }
+
+  header { padding: 20px 24px 14px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start; justify-content: space-between; }
   h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
-  header p { margin: 4px 0 0; color: var(--muted); max-width: 640px; }
-  .meta { color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; padding: 20px 24px 40px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 16px; } }
-  .listings { display: grid; gap: 16px; align-content: start; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
-  @media (max-width: 520px) { .card { grid-template-columns: 1fr; } }
-  .art { width: 120px; height: 120px; border-radius: 10px; }
-  .title { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  header p { margin: 4px 0 0; color: var(--muted); max-width: 680px; }
+  .legend { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .hright { display: grid; gap: 8px; justify-items: end; min-width: 0; }
+  .meta { color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, monospace; text-align: right; overflow-wrap: anywhere; }
+  .meta .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 5px; vertical-align: 1px; }
+  .meta .dot.on { background: var(--cap); }
+  .next { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .step { font-size: 12px; color: var(--muted); max-width: 320px; text-align: right; }
+  .step:empty { display: none; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; padding: 20px 24px 28px; }
+  .listings { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  aside { display: grid; gap: 16px; align-content: start; min-width: 0; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .card.selected { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel); }
+  .card.sold-out { cursor: default; }
+  .artcol { display: grid; gap: 8px; align-content: start; }
+  .art { width: 120px; height: 120px; border-radius: 10px; display: block; object-fit: cover; }
+  .title { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
   .title h2 { margin: 0; font-size: 17px; }
-  .badge { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); }
+  .badge { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
   .badge.sold { background: var(--cap-bg); color: var(--cap); border-color: transparent; }
-  .reason { margin: 8px 0 4px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 8px 8px 0; font-size: 14px; }
+  .badge.live { border-color: var(--held); color: var(--held); }
+  .badge.kind { font-size: 10px; padding: 1px 6px; font-weight: 600; }
+  .tx { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .reason { margin: 8px 0 6px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--soft); border-radius: 0 8px 8px 0; font-size: 14px; }
   .reason b { font-weight: 600; }
   .price { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  .price strong { color: var(--ink); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; font-size: 12px; }
+  .seg button { border: 0; background: transparent; padding: 4px 10px; cursor: pointer; color: var(--muted); }
+  .seg button.on { background: var(--accent); color: var(--on-accent); }
+  .trade { display: none; margin-left: auto; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
+
+  .sub { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
+  .thread { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; margin-bottom: 6px; font-size: 13px; display: grid; gap: 4px; }
+  .turn { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+  .turn.s { justify-content: flex-end; text-align: right; }
+  .turn .who { font-weight: 600; }
+  .turn .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bubble { padding: 4px 9px; border-radius: 12px; background: var(--soft); max-width: 100%; }
+  .turn.s .bubble { background: var(--accent); color: var(--on-accent); }
+  .turn .msg { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+  .turn.s .msg { text-align: right; }
+  .deal { color: var(--cap); font-weight: 700; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+  .tablewrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  td { padding: 5px 4px; border-top: 1px solid var(--line); }
+  td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .chip { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+  td + td { width: 1%; white-space: nowrap; padding-left: 10px; }
+  td.r { text-align: right; white-space: nowrap; }
+  .chip { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
   .held { background: var(--held-bg); color: var(--held); }
   .captured { background: var(--cap-bg); color: var(--cap); }
   .refunded { background: var(--ref-bg); color: var(--ref); }
-  aside { display: grid; gap: 16px; align-content: start; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; min-width: 0; }
   .panel h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .wallets { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-variant-numeric: tabular-nums; }
-  .log { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; font-size: 13px; }
-  .log li { padding: 6px 0; border-top: 1px solid var(--line); }
+  .you { border-color: var(--sel); }
+  .me-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .me-line .bal { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .selitem { margin: 10px 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--soft); font-size: 13px; display: flex; gap: 10px; align-items: center; }
+  .selitem svg, .selitem img { width: 40px; height: 40px; border-radius: 8px; flex: none; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .row input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); }
+  .row input:disabled { opacity: .5; }
+  .btn { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); border-radius: 9px; padding: 7px 12px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.small { padding: 3px 9px; font-size: 12px; border-radius: 7px; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .row .btn.grow { flex: 1; }
+  .reply { margin-top: 10px; font-size: 13px; }
+  .reply:empty, .err:empty { display: none; }
+  .reply .bubble { display: inline-block; background: var(--accent); color: var(--on-accent); }
+  .reply .bubble a { color: inherit; }
+  .err { margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: var(--err-bg); color: var(--err); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .hint:empty { display: none; }
+  .wallets { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .wallets .nm { display: flex; gap: 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+  .wallets .me { font-weight: 700; }
+  .log { list-style: none; margin: 0; padding: 0; max-height: 52vh; overflow: auto; font-size: 13px; }
+  .log li { padding: 6px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
   .log .t { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 11px; margin-right: 6px; }
   .log .who { font-weight: 600; margin-right: 4px; }
   .log a { color: var(--muted); font-size: 11px; margin-left: 4px; }
-  .legend { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .empty { color: var(--muted); font-size: 13px; }
+
+  footer { padding: 0 24px 32px; }
+  footer h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .rails { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .rail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; text-decoration: none; display: grid; gap: 2px; }
+  a.rail:hover { border-color: var(--muted); }
+  .rail .rn { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .rail .st { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+  .rail .st.live { background: var(--cap-bg); color: var(--cap); }
+  .rail .rd { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    header { padding: 16px; }
+    footer { padding: 0 16px 24px; }
+    .hright { justify-items: start; }
+    .meta, .step { text-align: left; }
+    .next { justify-content: flex-start; }
+    .trade { display: inline-block; }
+  }
+  @media (max-width: 520px) {
+    .card { display: block; padding: 14px; }
+    .card::after { content: ""; display: block; clear: both; }
+    .artcol { float: left; margin: 0 12px 6px 0; }
+    .art { width: 72px; height: 72px; }
+    .reason, .price { display: flow-root; }
+    .sub, .thread, .tablewrap { clear: both; }
+  }
 </style>
 </head>
 <body>
 <header>
   <div>
     <h1>Holdback Gallery</h1>
-    <p>A seller agent sells monkey NFTs to buyer agents. It picks how to sell from demand: offers, auction, falling price or buy-now. Every payment is a <b>hold</b> on Solana: captured only when the deal clears, refunded otherwise.</p>
+    <p>A seller agent sells monkey NFTs to buyer agents (and you), choosing offers, auction, falling price or buy-now from demand. Every offer, bid and purchase is an on-chain <b>hold</b>: captured when the deal clears, refunded otherwise.</p>
     <div class="legend"><span class="chip held">held</span> in escrow <span class="chip captured">captured</span> paid to seller <span class="chip refunded">refunded</span> back to buyer</div>
   </div>
-  <div class="meta" id="meta"></div>
+  <div class="hright">
+    <div class="meta" id="meta"><span class="dot"></span>connecting…</div>
+    <div class="next"><button class="btn" id="nextBtn" title="Advance the scripted scenario (Space)">Next scene ▶</button></div>
+    <div class="step" id="scenario"></div>
+    <div class="step" id="step"></div>
+  </div>
 </header>
 <main>
-  <section class="listings" id="listings"></section>
+  <section class="listings" id="listings"><div class="empty">Waiting for the market…</div></section>
   <aside>
-    <div class="panel"><h3>Agent wallets (dUSDC)</h3><div class="wallets" id="wallets"></div></div>
+    <div class="panel you" id="you">
+      <h3>You</h3>
+      <div class="me-line"><span id="meName" class="muted">Creating your wallet…</span><span><span class="bal" id="meBal">–</span> <span class="muted">dUSDC</span></span></div>
+      <div class="selitem" id="selItem"><span class="muted">Tap an item to trade on it.</span></div>
+      <div class="row"><input id="offerAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="Offer amount" aria-label="Offer amount"><button class="btn" id="bOffer">Make offer</button></div>
+      <div class="row"><button class="btn ghost grow" id="bAccept">Accept counter</button><button class="btn ghost grow" id="bWalk">Walk away</button></div>
+      <div class="row"><input id="bidMax" type="number" min="1" step="1" inputmode="numeric" placeholder="Your max bid" aria-label="Max bid"><button class="btn" id="bBid">Place bid</button></div>
+      <div class="row"><button class="btn grow" id="bBuy">Buy now</button></div>
+      <div class="hint" id="hint"></div>
+      <div class="reply" id="reply"></div>
+      <div class="err" id="err" role="alert"></div>
+      <div class="sub">Your holds</div>
+      <div id="myHolds"><div class="empty">None yet.</div></div>
+    </div>
+    <div class="panel"><h3>Wallets (dUSDC)</h3><div class="wallets" id="wallets"></div></div>
     <div class="panel"><h3>What just happened</h3><ul class="log" id="log"></ul></div>
   </aside>
 </main>
+<footer>
+  <h3>Payment rails</h3>
+  <div class="rails" id="rails"></div>
+</footer>
 <script>
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-function monkey(hue) {
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => n == null || n === "" || isNaN(n) ? "–" : (Number.isInteger(+n) ? String(+n) : (+n).toFixed(2));
+const LS_KEY = "holdback.buyerId", LS_SEL = "holdback.selected";
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const qTheme = new URLSearchParams(location.search).get("theme");
+if (qTheme === "dark" || qTheme === "light") document.documentElement.dataset.theme = qTheme;
+
+let S = null;            // last snapshot
+let me = null;           // Buyer
+let selected = lsGet(LS_SEL);
+const actionNote = {};   // itemId -> html of last action result
+const cache = new Map(); // key -> last html (skip DOM writes when unchanged: keeps focus, hover, scroll)
+
+function setHTML(el, html, key) {
+  key = key || el.id;
+  if (cache.get(key) === html) return false;
+  cache.set(key, html); el.innerHTML = html; return true;
+}
+
+function monkey(hue, cls = "art") {
+  hue = Number(hue) || 0;
   const f = `hsl(${hue} 45% 42%)`, face = `hsl(${hue} 55% 78%)`, bg = `hsl(${(hue + 160) % 360} 60% 88%)`;
-  return `<svg class="art" viewBox="0 0 120 120" role="img" aria-label="monkey artwork">
+  return `<svg class="${cls}" viewBox="0 0 120 120" role="img" aria-label="monkey artwork">
     <rect width="120" height="120" rx="10" fill="${bg}"/>
     <circle cx="28" cy="58" r="15" fill="${f}"/><circle cx="92" cy="58" r="15" fill="${f}"/>
     <circle cx="28" cy="58" r="8" fill="${face}"/><circle cx="92" cy="58" r="8" fill="${face}"/>
@@ -84,24 +225,393 @@ function monkey(hue) {
     <path d="M50 78 Q60 86 70 78" stroke="#1d1b16" stroke-width="3" fill="none" stroke-linecap="round"/>
   </svg>`;
 }
-function render(s) {
-  document.getElementById("meta").textContent = `${s.cluster} · program ${s.program.slice(0, 8)}…`;
-  document.getElementById("listings").innerHTML = s.listings.map((l) => `
-    <article class="card">
-      ${monkey(l.hue)}
-      <div>
-        <div class="title"><h2>${esc(l.name)}</h2>
-          ${l.status === "sold" ? `<span class="badge sold">sold to ${esc(l.buyer)} · ${l.paid}</span>` : l.mechanism ? `<span class="badge">${esc(l.mechanism)}</span>` : ""}
-        </div>
-        ${l.reason ? `<div class="reason"><b>Seller agent:</b> ${esc(l.reason)}</div>` : ""}
-        ${l.price ? `<div class="price">${esc(l.price)}</div>` : ""}
-        ${l.holds.length ? `<table>${l.holds.map((h) => `<tr><td>${esc(h.agent)}</td><td>${esc(h.kind)}</td><td class="num">${h.captured != null && h.captured < h.amount ? `${h.captured} <span style="color:var(--muted)">of ${h.amount} · ${h.amount - h.captured} back</span>` : h.amount}</td><td><span class="chip ${h.status}">${h.status}</span></td></tr>`).join("")}</table>` : ""}
-      </div>
-    </article>`).join("");
-  document.getElementById("wallets").innerHTML = Object.entries(s.wallets).map(([k, v]) => `<span>${esc(k)}</span><span>${v.toFixed(2)}</span>`).join("");
-  document.getElementById("log").innerHTML = s.log.map((e) => `<li><span class="t">${e.t}</span><span class="who">${esc(e.who)}</span>${esc(e.text)}${e.tx ? `<a href="${esc(e.tx)}" target="_blank" rel="noopener">tx ↗</a>` : ""}</li>`).join("");
+const art = (it, cls = "art") => it.image ? `<img class="${cls}" src="${esc(it.image)}" alt="${esc(it.name)}">` : monkey(it.hue, cls);
+
+function txUrl(tx) {
+  if (!tx) return "";
+  if (/^https?:\/\//i.test(tx)) return tx;
+  const c = (S && S.cluster) || "devnet";
+  const q = /mainnet/.test(c) ? "" : /devnet|testnet/.test(c) ? `?cluster=${c}` : "?cluster=custom";
+  return `https://explorer.solana.com/tx/${encodeURIComponent(tx)}${q}`;
 }
-new EventSource("/events").onmessage = (e) => render(JSON.parse(e.data));
+const txLink = (tx, label = "tx ↗") => tx ? `<a class="tx" href="${esc(txUrl(tx))}" target="_blank" rel="noopener">${label}</a>` : "";
+const chip = (st) => `<span class="chip ${esc(st)}">${esc(st)}</span>`;
+const isMine = (h) => !!me && (h.buyer === me.id || h.buyer === me.name);
+const buyerByKey = (k) => S && (S.buyers || []).find((b) => b.id === k || b.name === k);
+const displayName = (k) => {
+  if (me && k === me.id) return "You";
+  const b = buyerByKey(k);
+  return b ? (me && b.id === me.id ? "You" : b.name) : String(k ?? "");
+};
+const MECH = { "buy-now": "Buy-now", offers: "Offers", auction: "Auction", dutch: "Dutch" };
+
+function amountCell(h) {
+  if (h.captured != null && h.captured < h.amount && h.status === "captured")
+    return `${fmt(h.captured)} <span class="muted">of ${fmt(h.amount)} · ${fmt(h.amount - h.captured)} back</span>`;
+  return fmt(h.amount);
+}
+
+function mechBadge(it) {
+  if (it.status === "sold") return `<span class="badge sold">Sold · ${fmt(it.soldFor)} dUSDC${it.soldTo ? ` · ${esc(displayName(it.soldTo))}` : ""}</span>${txLink(it.saleTx)}`;
+  if (it.status === "unsold") return `<span class="badge">Unsold</span>`;
+  switch (it.mechanism) {
+    case "auction": return it.auction && it.auction.closed ? `<span class="badge">Auction closed</span>` : `<span class="badge live">Auction · <span class="cd" data-ends="${esc(it.auction && it.auction.endsAt)}"></span></span>`;
+    case "dutch": return `<span class="badge live">Dutch · now ${fmt(it.price)}</span>`;
+    case "offers": return `<span class="badge">Offers</span>`;
+    case "buy-now": return `<span class="badge">Buy-now</span>${it.guarantee ? `<span class="badge">${esc(it.guarantee)} guarantee</span>` : ""}`;
+    default: return it.mechanism ? `<span class="badge">${esc(it.mechanism)}</span>` : "";
+  }
+}
+
+function priceLine(it) {
+  const w = (it.watchers || []).length;
+  const watch = w ? ` · ${w} watching` : "";
+  if (it.status === "sold") return `Asked <strong>${fmt(it.ask)}</strong> · sold for <strong>${fmt(it.soldFor)}</strong> dUSDC${it.guarantee ? ` · payment releases after the ${esc(it.guarantee)} guarantee unless the buyer reclaims` : ""}`;
+  switch (it.mechanism) {
+    case "buy-now": return `Buy now: <strong>${fmt(it.price ?? it.ask)}</strong> dUSDC${watch}`;
+    case "offers": return `Asking <strong>${fmt(it.ask)}</strong> dUSDC · make an offer (the seller agent counters) or buy at ask${watch}`;
+    case "auction": {
+      const a = it.auction || {};
+      return `Ask <strong>${fmt(it.ask)}</strong>${a.price != null ? ` · now <strong>${fmt(a.price)}</strong>` : ""} · ${a.bids || 0} bid${a.bids === 1 ? "" : "s"}${a.leader ? ` · leading: ${esc(displayName(a.leader))}` : ""} · reserve ${a.reserveMet ? "met" : "not met"}${watch}`;
+    }
+    case "dutch": return `Started at <strong>${fmt(it.ask)}</strong> · now <strong>${fmt(it.price)}</strong> dUSDC and falling${watch}`;
+    default: return `Ask <strong>${fmt(it.ask)}</strong>${watch}`;
+  }
+}
+
+const isHoldTurn = (t) => t.from === "buyer" && (t.action === "offer" || t.action === "accept");
+function threads(it) {
+  const entries = Object.entries(it.negotiations || {}).filter(([, t]) => t && t.length);
+  if (!entries.length) return "";
+  return `<div class="sub">Negotiations</div>` + entries.map(([buyer, turns]) => {
+    const who = displayName(buyer);
+    // buyer offers/accepts pair with that buyer's non-bid holds, in order
+    const hs = (it.holds || []).filter((h) => h.kind !== "bid" && (h.buyer === buyer || displayName(h.buyer) === who));
+    const shown = turns.slice(-8);
+    let hi = turns.slice(0, turns.length - shown.length).filter(isHoldTurn).length;
+    const rows = shown.map((t) => {
+      const amt = `<span class="amt">${fmt(t.amount)}</span>`;
+      const msg = t.message ? `<div class="msg">${esc(t.message)}</div>` : "";
+      if (t.from === "buyer") {
+        let c = "";
+        if (isHoldTurn(t)) { const h = hs[hi++]; if (h) c = chip(h.status); }
+        const you = who === "You";
+        const verb = (you ? { offer: `offer ${amt}`, accept: `accept ${amt}`, walk_away: "walk away", decline: "decline", counter: `counter ${amt}` }
+          : { offer: `offers ${amt}`, accept: `accepts ${amt}`, walk_away: "walks away", decline: "declines", counter: `counters ${amt}` })[t.action] || esc(t.action);
+        return `<div class="turn b"><span class="bubble"><span class="who">${esc(who)}</span> ${verb}</span>${c}${msg}</div>`;
+      }
+      const verb = { counter: `counters ${amt}`, accept: `✅ accepts ${amt}`, decline: `declines${t.amount ? ` · ask ${amt}` : ""}`, walk_away: "ends talks", offer: `offers ${amt}` }[t.action] || esc(t.action);
+      return `<div class="turn s"><span class="bubble"><span class="who">Seller</span> ${verb}</span>${msg}</div>`;
+    }).join("");
+    const deal = it.status === "sold" && it.soldTo != null && displayName(it.soldTo) === who
+      ? `<div class="deal">✅ Deal at ${fmt(it.soldFor)} dUSDC ${txLink(it.saleTx)}</div>` : "";
+    return `<div class="thread">${rows}${deal}</div>`;
+  }).join("");
+}
+
+function holdsTable(it) {
+  const hs = it.holds || [];
+  if (!hs.length) return "";
+  return `<div class="sub">Holds</div><div class="tablewrap"><table>${hs.map((h) => `<tr>
+    <td>${esc(displayName(h.buyer))}</td><td class="muted">${esc(h.kind)}</td>
+    <td class="num">${amountCell(h)}</td><td>${chip(h.status)}</td>
+    <td class="r">${txLink(h.settleTx || h.tx)}</td></tr>`).join("")}</table></div>`;
+}
+
+function cardHTML(it) {
+  const goal = it.status === "listed" ? `<div class="ctl">Seller goal <span class="seg" role="group" aria-label="Seller goal">
+      <button type="button" data-goal="best-price" data-item="${esc(it.id)}" class="${it.goal === "best-price" ? "on" : ""}">Best price</button>
+      <button type="button" data-goal="quick-sale" data-item="${esc(it.id)}" class="${it.goal === "quick-sale" ? "on" : ""}">Quick sale</button></span>
+      <button type="button" class="btn small trade" data-trade="${esc(it.id)}">Trade ↓</button></div>` : "";
+  return `<div class="artcol">${art(it)}</div>
+    <div style="min-width:0">
+      <div class="title"><h2>${esc(it.name)}</h2>${mechBadge(it)}</div>
+      ${it.reason ? `<div class="reason"><b>Seller agent:</b> ${esc(it.reason)}</div>` : ""}
+      <div class="price">${priceLine(it)}</div>
+      ${goal}
+      ${threads(it)}
+      ${holdsTable(it)}
+    </div>`;
+}
+
+function renderItems() {
+  const box = $("listings");
+  const items = S.items || [];
+  if (!items.length) { box.innerHTML = `<div class="empty">No items listed yet.</div>`; for (const k of [...cache.keys()]) if (k.startsWith("card:")) cache.delete(k); return; }
+  const empty = box.querySelector(".empty"); if (empty) empty.remove();
+  const seen = new Set();
+  items.forEach((it, i) => {
+    seen.add(it.id);
+    let el = [...box.children].find((c) => c.dataset.id === it.id);
+    if (!el) { el = document.createElement("article"); el.className = "card"; el.dataset.id = it.id; }
+    if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
+    el.classList.toggle("selected", it.id === selected);
+    el.classList.toggle("sold-out", it.status !== "listed");
+    setHTML(el, cardHTML(it), "card:" + it.id);
+  });
+  [...box.children].forEach((el) => { if (!seen.has(el.dataset.id)) { el.remove(); cache.delete("card:" + el.dataset.id); } });
+}
+
+function renderWallets() {
+  const bs = (S.buyers || []).slice();
+  if (S.seller && S.seller.balance != null) bs.unshift({ id: "__seller", name: S.seller.name || "Seller agent", kind: "seller", balance: S.seller.balance });
+  setHTML($("wallets"), bs.length ? bs.map((b) => {
+    const mine = me && b.id === me.id;
+    return `<span class="nm ${mine ? "me" : ""}">${esc(mine ? "You" : b.name)} <span class="badge kind">${esc(b.kind)}</span></span><span>${fmt(b.balance)}</span>`;
+  }).join("") : `<span class="empty">No buyers yet.</span>`);
+}
+
+function renderLog() {
+  const log = S.log || [];
+  setHTML($("log"), log.length ? log.slice(0, 120).map((e) => `<li><span class="t">${esc(e.t)}</span><span class="who">${esc(e.who)}</span>${esc(e.text)}${e.tx ? `<a href="${esc(txUrl(e.tx))}" target="_blank" rel="noopener">tx ↗</a>` : ""}</li>`).join("") : `<li class="empty">Nothing yet.</li>`);
+}
+
+function renderScenario() {
+  const sc = S.scenario;
+  if (!sc || sc.mode === "off") return;
+  const txt = `Scene ${Math.min(sc.scene, sc.total)}/${sc.total}${sc.running ? " · running…" : ""}${sc.next ? ` · next: ${sc.next}` : " · done"}${sc.mode === "auto" ? " · auto" : ""}`;
+  if ($("scenario").textContent !== txt) $("scenario").textContent = txt;
+}
+function renderMeta() {
+  const prog = String(S.program || "");
+  const c = S.cluster || "?";
+  setHTML($("meta"), `<span class="dot on"></span>Solana ${esc(c)}${prog ? ` · program <span title="${esc(prog)}">${esc(prog.slice(0, 4))}…${esc(prog.slice(-4))}</span>` : ""}`);
+}
+
+function rail(name, desc, status, url) {
+  const inner = `<span class="rn">${esc(name)}<span class="st ${status === "live" ? "live" : ""}">${esc(status)}</span></span><span class="rd">${esc(desc)}</span>`;
+  return url ? `<a class="rail" href="${esc(url)}" target="_blank" rel="noopener">${inner}<span class="rd">explorer ↗</span></a>` : `<div class="rail">${inner}</div>`;
+}
+function renderRails() {
+  const r = S.rails;
+  const list = Array.isArray(r) ? r : r && typeof r === "object" ? Object.entries(r).map(([k, v]) => ({ id: k, ...(v || {}) })) : [];
+  const find = (re) => list.find((x) => re.test(`${x.id || ""} ${x.name || ""} ${x.chain || ""}`));
+  const url = (x) => x && (x.explorer || x.url || x.tx);
+  const desc = (x, d) => (x && (x.note || x.desc || x.description)) || d;
+  const sol = find(/solana/i), tempo = find(/tempo/i), rh = find(/robinhood/i);
+  const c = S.cluster || "devnet";
+  const solUrl = url(sol) || (S.program ? `https://explorer.solana.com/address/${encodeURIComponent(S.program)}${/devnet|testnet/.test(c) ? `?cluster=${c}` : ""}` : "");
+  const out = [rail("Solana", desc(sol, `${c} · dUSDC auth-capture holds`), (sol && sol.status) || "live", solUrl)];
+  if (tempo) out.push(rail("Tempo", desc(tempo, "testnet · stablecoin payments"), tempo.status || "testnet", url(tempo)));
+  if (rh) out.push(rail("Robinhood Chain", desc(rh, "testnet · TSLA stock token"), rh.status || "testnet", url(rh)));
+  for (const x of list) if (x !== sol && x !== tempo && x !== rh) out.push(rail(x.name || x.id, desc(x, x.network || ""), x.status || "testnet", url(x)));
+  setHTML($("rails"), out.join(""));
+}
+
+// ----------------------------------------------------------------- "You" panel
+const selItem = () => S && (S.items || []).find((i) => i.id === selected);
+function myTurns(it) {
+  if (!it || !me) return [];
+  const n = it.negotiations || {};
+  return n[me.name] || n[me.id] || [];
+}
+function replyHTML(t) {
+  const verb = { counter: `counters at <b>${fmt(t.amount)}</b>`, accept: `✅ accepts <b>${fmt(t.amount)}</b>`, decline: `declines${t.amount ? ` (asks ${fmt(t.amount)})` : ""}`, walk_away: "ends talks" }[t.action] || esc(t.action);
+  return `<span class="bubble"><b>Seller</b> ${verb}${t.message ? ` · ${esc(t.message)}` : ""}</span>`;
+}
+function renderYou() {
+  const b = me && S && (S.buyers || []).find((x) => x.id === me.id);
+  if (me) {
+    setHTML($("meName"), `${esc(me.name)} <span class="badge kind">${esc(me.kind || "human")}</span>`);
+    $("meName").classList.remove("muted");
+    $("meBal").textContent = fmt(b ? b.balance : me.balance);
+  }
+  const it = selItem();
+  const listed = !!it && it.status === "listed";
+  const m = it && it.mechanism;
+  const turns = myTurns(it);
+  const last = turns[turns.length - 1];
+  const counter = last && last.from === "seller" && last.action === "counter" ? last : null;
+  const myHeld = it ? (it.holds || []).filter((h) => isMine(h) && h.status === "held") : [];
+  const ok = !!me && listed;
+  const can = { offer: ok && m === "offers" && it.kind !== "digital", bid: ok && m === "auction", buy: ok && (m === "buy-now" || m === "dutch" || m === "offers") };
+  $("bOffer").disabled = $("offerAmt").disabled = !can.offer;
+  $("bAccept").disabled = !(can.offer && counter);
+  $("bAccept").textContent = counter ? `Accept counter · ${fmt(counter.amount)}` : "Accept counter";
+  $("bWalk").disabled = !(can.offer && (counter || myHeld.length));
+  $("bBid").disabled = $("bidMax").disabled = !can.bid;
+  $("bBuy").disabled = !can.buy;
+  $("bBuy").textContent = can.buy ? `${m === "offers" ? "Buy at ask" : "Buy now"} · ${fmt(m === "offers" ? it.ask : (it.price ?? it.ask))} dUSDC` : "Buy now";
+  $("offerAmt").placeholder = it && m === "offers" ? `Offer amount (ask ${fmt(it.ask)})` : "Offer amount";
+  $("bidMax").placeholder = it && m === "auction" ? `Your max bid (ask ${fmt(it.ask)})` : "Your max bid";
+  setHTML($("selItem"), it
+    ? `${art(it, "")}<div style="min-width:0"><b>${esc(it.name)}</b><div class="muted">${esc(MECH[m] || m || "")} · ${it.status === "listed" ? `ask ${fmt(it.ask)}${m === "dutch" ? ` · now ${fmt(it.price)}` : ""}` : it.status === "sold" ? `sold for ${fmt(it.soldFor)}` : "unsold"}</div></div>`
+    : `<span class="muted">Tap an item to trade on it.</span>`);
+  $("hint").textContent = !me ? "Setting up your demo wallet (300 dUSDC)…"
+    : !it ? "" : !listed ? "This item is no longer for sale."
+    : m === "offers" ? "Your offer is held on-chain; the seller agent answers at once."
+    : m === "auction" ? "Proxy bid: your max is held; the winner pays 2nd-highest + 1, losers are refunded at close."
+    : m === "dutch" ? "The price falls over time. Buying captures the current price at once."
+    : it.guarantee ? `Fixed price with a ${it.guarantee} guarantee: your payment stays held and you can reclaim it yourself.`
+    : "Fixed price. Buying captures at once, with NFT delivery.";
+  let rep = it && actionNote[it.id];
+  if (!rep && last && last.from === "seller") rep = replyHTML(last);
+  setHTML($("reply"), rep || "");
+  const mine = [];
+  for (const x of (S && S.items) || []) for (const h of x.holds || []) if (isMine(h)) mine.push([x, h]);
+  setHTML($("myHolds"), mine.length ? `<div class="tablewrap"><table>${mine.map(([x, h]) => `<tr>
+      <td>${esc(x.name)}</td><td class="muted">${esc(h.kind)}</td><td class="num">${amountCell(h)}</td><td>${chip(h.status)}</td>
+      <td class="r">${h.status === "held" ? `<button class="btn ghost small" data-reclaim="${esc(h.id)}">Reclaim</button> ` : ""}${txLink(h.settleTx || h.tx)}</td></tr>`).join("")}</table></div>`
+    : `<div class="empty">None yet.</div>`);
+}
+
+function render() {
+  if (!S) return;
+  const items = S.items || [];
+  if (!selected || !items.some((i) => i.id === selected)) {
+    const first = items.find((i) => i.status === "listed") || items[0];
+    if (first) select(first.id, false);
+  }
+  renderMeta(); renderScenario(); renderItems(); renderWallets(); renderLog(); renderRails(); renderYou(); tick();
+}
+
+function tick() {
+  const now = Date.now();
+  for (const el of document.querySelectorAll(".cd[data-ends]")) {
+    const end = Date.parse(el.dataset.ends);
+    if (isNaN(end)) { el.textContent = "live"; continue; }
+    const s = Math.max(0, Math.round((end - now) / 1000));
+    el.textContent = s ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} left` : "closing…";
+  }
+}
+setInterval(tick, 500);
+
+// ----------------------------------------------------------------- API
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  let data = null; try { data = await r.json(); } catch {}
+  if (!r.ok) { const e = new Error((data && data.error) || `${r.status} ${r.statusText}`); e.status = r.status; throw e; }
+  return data;
+}
+let creating = null;
+function ensureBuyer(force) {
+  if (creating) return creating;
+  creating = (async () => {
+    const id = force ? null : lsGet(LS_KEY);
+    if (id) {
+      try { me = await api("GET", `/api/buyers/${encodeURIComponent(id)}`); if (me && me.id) return me; }
+      catch (e) { if (!e.status || e.status >= 500) throw e; /* 4xx: unknown buyer → create a new one */ }
+    }
+    me = await api("POST", "/api/buyers", { name: "You", kind: "human" });
+    lsSet(LS_KEY, me.id);
+    return me;
+  })().finally(() => { creating = null; });
+  return creating;
+}
+async function bootBuyer() {
+  for (let i = 0; i < 30; i++) {
+    try { await ensureBuyer(); $("err").textContent = ""; render(); renderYou(); return; }
+    catch (e) { $("err").textContent = `Wallet setup failed: ${e.message}. Retrying…`; await new Promise((r) => setTimeout(r, 2000)); }
+  }
+}
+// actions retry once with a fresh buyer if the server forgot us (e.g. restart)
+async function act(fn) {
+  $("err").textContent = "";
+  try {
+    if (!me) await ensureBuyer();
+    try { return await fn(); }
+    catch (e) {
+      if (/unknown buyer|buyer not found|no such buyer/i.test(e.message)) { await ensureBuyer(true); return await fn(); }
+      throw e;
+    }
+  } catch (e) { $("err").textContent = e.message; }
+  finally { renderYou(); }
+}
+const note = (id, html) => { actionNote[id] = html; };
+
+function select(id, fetchIt = true) {
+  if (selected !== id) { selected = id; lsSet(LS_SEL, id); $("offerAmt").value = ""; $("bidMax").value = ""; $("err").textContent = ""; }
+  for (const el of document.querySelectorAll("#listings article")) el.classList.toggle("selected", el.dataset.id === id);
+  if (S) renderYou();
+  if (fetchIt && me) fetch(`/api/items/${encodeURIComponent(id)}?buyerId=${encodeURIComponent(me.id)}`).catch(() => {});
+}
+
+$("listings").addEventListener("click", (e) => {
+  const g = e.target.closest("[data-goal]");
+  if (g) {
+    api("POST", "/api/control/goal", { itemId: g.dataset.item, goal: g.dataset.goal }).catch((err) => { $("err").textContent = err.message; });
+    return;
+  }
+  if (e.target.closest("a")) return;
+  const card = e.target.closest("article[data-id]");
+  if (card) {
+    select(card.dataset.id);
+    if (window.matchMedia("(max-width: 900px)").matches && e.target.closest(".art, [data-trade]")) $("you").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
+
+$("bOffer").onclick = () => act(async () => {
+  const it = selItem(); const amount = Math.round(Number($("offerAmt").value));
+  if (!amount || amount <= 0) throw new Error("Enter an offer amount.");
+  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/offer`, { buyerId: me.id, amount });
+  note(it.id, r && r.reply ? replyHTML(r.reply) : `Offer of ${fmt(amount)} held.`);
+  $("offerAmt").value = "";
+});
+$("bAccept").onclick = () => act(async () => {
+  const it = selItem();
+  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, { buyerId: me.id, action: "accept" });
+  const h = r && r.hold;
+  note(it.id, `<span class="bubble">✅ You bought it${h ? ` for <b>${fmt(h.captured ?? h.amount)}</b> dUSDC` : ""}</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
+});
+$("bWalk").onclick = () => act(async () => {
+  const it = selItem();
+  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, { buyerId: me.id, action: "walk_away" });
+  note(it.id, `You walked away; your hold is refunded.${r && r.reply && r.reply.message ? ` <span class="muted">Seller: ${esc(r.reply.message)}</span>` : ""}`);
+});
+$("bBid").onclick = () => act(async () => {
+  const it = selItem(); const max = Math.round(Number($("bidMax").value));
+  if (!max || max <= 0) throw new Error("Enter your max bid.");
+  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/bid`, { buyerId: me.id, max });
+  const lead = r && r.item && r.item.auction && r.item.auction.leader;
+  note(it.id, `Bid placed: <b>${fmt(max)}</b> held ${r && r.hold ? txLink(r.hold.tx) : ""}${lead ? ` · leading: ${esc(displayName(lead))}` : ""}`);
+  $("bidMax").value = "";
+});
+$("bBuy").onclick = () => act(async () => {
+  const it = selItem();
+  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/buy`, { buyerId: me.id });
+  const h = r && r.hold;
+  note(it.id, `<span class="bubble">✅ Bought for <b>${fmt(h ? (h.captured ?? h.amount) : it.price)}</b> dUSDC</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
+});
+$("myHolds").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-reclaim]"); if (!b) return;
+  b.disabled = true;
+  act(async () => { await api("POST", `/api/holds/${encodeURIComponent(b.dataset.reclaim)}/reclaim`, { buyerId: me.id }); });
+});
+$("offerAmt").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("bOffer").disabled) $("bOffer").click(); });
+$("bidMax").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("bBid").disabled) $("bBid").click(); });
+
+async function nextScene() {
+  const b = $("nextBtn"); b.disabled = true;
+  try {
+    const r = await api("POST", "/api/control/next");
+    $("step").textContent = r && r.step ? `▶ ${r.step}` : "";
+    clearTimeout(nextScene.t); nextScene.t = setTimeout(() => { $("step").textContent = ""; }, 5000);
+  }
+  catch (e) { $("step").textContent = `Next scene failed: ${e.message}`; }
+  finally { b.disabled = false; }
+}
+$("nextBtn").onclick = nextScene;
+document.addEventListener("keydown", (e) => {
+  if (e.code !== "Space" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = document.activeElement;
+  if (t && /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(t.tagName)) return;
+  e.preventDefault(); nextScene();
+});
+
+// ----------------------------------------------------------------- live feed
+function connect() {
+  const es = new EventSource("/events");
+  es.onmessage = (e) => { try { S = JSON.parse(e.data); render(); } catch (err) { console.error(err); } };
+  es.onopen = () => { const d = document.querySelector("#meta .dot"); if (d) d.classList.add("on"); };
+  es.onerror = () => { const d = document.querySelector("#meta .dot"); if (d) d.classList.remove("on"); };
+}
+connect();
+bootBuyer();
+// fallback if the SSE snapshot is slow to arrive
+setTimeout(async () => {
+  if (S) return;
+  try { const items = await api("GET", "/api/items"); if (!S) { S = { cluster: "", program: "", items, buyers: [], log: [] }; render(); } } catch {}
+}, 2500);
 </script>
 </body>
 </html>
