@@ -9,16 +9,19 @@ export type Signals = {
   offers: number;         // live offers
   secondsListed: number;
   urgent: boolean;        // seller wants a quick sale
+  staleSecs?: number;     // no interest for this long → Dutch auction (default 20; <= 0 means never)
 };
 
 export type Goal = { floor: number; target: number };
 
 export function chooseMechanism(s: Signals, g: Goal): { mechanism: Mechanism; reason: string } {
-  if (s.urgent) return { mechanism: "dutch", reason: "seller wants a quick sale → price falls until the first buyer takes it" };
+  const stale = s.staleSecs ?? 20;
   if (s.watchers >= 3) return { mechanism: "auction", reason: `${s.watchers} buyers interested → let them compete (proxy auction, winner pays 2nd price + increment)` };
+  if (s.urgent && s.watchers >= 1) return { mechanism: "offers", reason: `quick sale wanted and ${s.watchers} buyer${s.watchers > 1 ? "s" : ""} interested → open to offers, conceding fast` };
+  if (s.urgent) return { mechanism: "dutch", reason: "seller wants a quick sale → price falls until the first buyer takes it" };
   if (s.watchers >= 1) return { mechanism: "offers", reason: `only ${s.watchers} interested buyer${s.watchers > 1 ? "s" : ""} → open to offers, counter anything under ${g.target}` };
-  if (s.secondsListed > 20) return { mechanism: "dutch", reason: "no interest yet → price drops step by step toward the floor" };
-  return { mechanism: "buy-now", reason: `fresh listing → fixed price ${g.target} with a 7-day guarantee` };
+  if (stale > 0 && s.secondsListed > stale) return { mechanism: "dutch", reason: `no interest after ${Math.round(s.secondsListed)}s → price drops step by step toward the floor` };
+  return { mechanism: "buy-now", reason: `fresh listing → fixed price ${g.target}, waiting to see demand` };
 }
 
 /** Counter-offer policy: accept at/above target, counter halfway in between, refuse below floor. */

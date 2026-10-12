@@ -9,6 +9,13 @@ test("mechanism follows demand", () => {
   assert.equal(chooseMechanism({ watchers: 3, offers: 1, secondsListed: 5, urgent: false }, goal).mechanism, "auction");
   assert.equal(chooseMechanism({ watchers: 0, offers: 0, secondsListed: 30, urgent: false }, goal).mechanism, "dutch");
 });
+test("quick sale and staleness", () => {
+  assert.equal(chooseMechanism({ watchers: 0, offers: 0, secondsListed: 0, urgent: true }, goal).mechanism, "dutch");
+  assert.equal(chooseMechanism({ watchers: 1, offers: 0, secondsListed: 0, urgent: true }, goal).mechanism, "offers");
+  assert.equal(chooseMechanism({ watchers: 3, offers: 0, secondsListed: 0, urgent: true }, goal).mechanism, "auction");
+  assert.equal(chooseMechanism({ watchers: 0, offers: 0, secondsListed: 999, urgent: false, staleSecs: 0 }, goal).mechanism, "buy-now", "never stale");
+  assert.equal(chooseMechanism({ watchers: 0, offers: 0, secondsListed: 6, urgent: false, staleSecs: 5 }, goal).mechanism, "dutch");
+});
 test("offers", () => {
   assert.deepEqual(respondToOffer(45, goal), { action: "decline" });
   assert.deepEqual(respondToOffer(60, goal), { action: "counter", counter: 80 });
