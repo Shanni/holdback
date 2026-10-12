@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Holdback Gallery</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1b16; --muted: #6b665c; --line: #e4dfd4;
+    --held: #b7791f; --held-bg: #fdf3e1; --cap: #2f7d4f; --cap-bg: #e5f4ea; --ref: #5b6b8c; --ref-bg: #e9edf5;
+    --accent: #1d1b16;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #15140f; --panel: #1f1d17; --ink: #f1ede4; --muted: #a39d90; --line: #34312a;
+      --held: #f0b75a; --held-bg: #3a2e18; --cap: #6fd39a; --cap-bg: #183224; --ref: #a9b7d6; --ref-bg: #232a3a; --accent: #f1ede4; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 22px 24px 14px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  header p { margin: 4px 0 0; color: var(--muted); max-width: 640px; }
+  .meta { color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; padding: 20px 24px 40px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 16px; } }
+  .listings { display: grid; gap: 16px; align-content: start; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 520px) { .card { grid-template-columns: 1fr; } }
+  .art { width: 120px; height: 120px; border-radius: 10px; }
+  .title { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .title h2 { margin: 0; font-size: 17px; }
+  .badge { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); }
+  .badge.sold { background: var(--cap-bg); color: var(--cap); border-color: transparent; }
+  .reason { margin: 8px 0 4px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 8px 8px 0; font-size: 14px; }
+  .reason b { font-weight: 600; }
+  .price { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 5px 4px; border-top: 1px solid var(--line); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .chip { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+  .held { background: var(--held-bg); color: var(--held); }
+  .captured { background: var(--cap-bg); color: var(--cap); }
+  .refunded { background: var(--ref-bg); color: var(--ref); }
+  aside { display: grid; gap: 16px; align-content: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .panel h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .wallets { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-variant-numeric: tabular-nums; }
+  .log { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow: auto; font-size: 13px; }
+  .log li { padding: 6px 0; border-top: 1px solid var(--line); }
+  .log .t { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 11px; margin-right: 6px; }
+  .log .who { font-weight: 600; margin-right: 4px; }
+  .log a { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  .legend { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Holdback Gallery</h1>
+    <p>A seller agent sells monkey NFTs to buyer agents. It picks how to sell from demand: offers, auction, falling price or buy-now. Every payment is a <b>hold</b> on Solana: captured only when the deal clears, refunded otherwise.</p>
+    <div class="legend"><span class="chip held">held</span> in escrow <span class="chip captured">captured</span> paid to seller <span class="chip refunded">refunded</span> back to buyer</div>
+  </div>
+  <div class="meta" id="meta"></div>
+</header>
+<main>
+  <section class="listings" id="listings"></section>
+  <aside>
+    <div class="panel"><h3>Agent wallets (dUSDC)</h3><div class="wallets" id="wallets"></div></div>
+    <div class="panel"><h3>What just happened</h3><ul class="log" id="log"></ul></div>
+  </aside>
+</main>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function monkey(hue) {
+  const f = `hsl(${hue} 45% 42%)`, face = `hsl(${hue} 55% 78%)`, bg = `hsl(${(hue + 160) % 360} 60% 88%)`;
+  return `<svg class="art" viewBox="0 0 120 120" role="img" aria-label="monkey artwork">
+    <rect width="120" height="120" rx="10" fill="${bg}"/>
+    <circle cx="28" cy="58" r="15" fill="${f}"/><circle cx="92" cy="58" r="15" fill="${f}"/>
+    <circle cx="28" cy="58" r="8" fill="${face}"/><circle cx="92" cy="58" r="8" fill="${face}"/>
+    <circle cx="60" cy="60" r="36" fill="${f}"/>
+    <ellipse cx="60" cy="70" rx="24" ry="20" fill="${face}"/>
+    <ellipse cx="48" cy="52" rx="9" ry="10" fill="${face}"/><ellipse cx="72" cy="52" rx="9" ry="10" fill="${face}"/>
+    <circle cx="49" cy="54" r="4" fill="#1d1b16"/><circle cx="71" cy="54" r="4" fill="#1d1b16"/>
+    <ellipse cx="60" cy="68" rx="5" ry="3" fill="#1d1b16" opacity=".7"/>
+    <path d="M50 78 Q60 86 70 78" stroke="#1d1b16" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </svg>`;
+}
+function render(s) {
+  document.getElementById("meta").textContent = `${s.cluster} · program ${s.program.slice(0, 8)}…`;
+  document.getElementById("listings").innerHTML = s.listings.map((l) => `
+    <article class="card">
+      ${monkey(l.hue)}
+      <div>
+        <div class="title"><h2>${esc(l.name)}</h2>
+          ${l.status === "sold" ? `<span class="badge sold">sold to ${esc(l.buyer)} · ${l.paid}</span>` : l.mechanism ? `<span class="badge">${esc(l.mechanism)}</span>` : ""}
+        </div>
+        ${l.reason ? `<div class="reason"><b>Seller agent:</b> ${esc(l.reason)}</div>` : ""}
+        ${l.price ? `<div class="price">${esc(l.price)}</div>` : ""}
+        ${l.holds.length ? `<table>${l.holds.map((h) => `<tr><td>${esc(h.agent)}</td><td>${esc(h.kind)}</td><td class="num">${h.captured != null && h.captured < h.amount ? `${h.captured} <span style="color:var(--muted)">of ${h.amount} · ${h.amount - h.captured} back</span>` : h.amount}</td><td><span class="chip ${h.status}">${h.status}</span></td></tr>`).join("")}</table>` : ""}
+      </div>
+    </article>`).join("");
+  document.getElementById("wallets").innerHTML = Object.entries(s.wallets).map(([k, v]) => `<span>${esc(k)}</span><span>${v.toFixed(2)}</span>`).join("");
+  document.getElementById("log").innerHTML = s.log.map((e) => `<li><span class="t">${e.t}</span><span class="who">${esc(e.who)}</span>${esc(e.text)}${e.tx ? `<a href="${esc(e.tx)}" target="_blank" rel="noopener">tx ↗</a>` : ""}</li>`).join("");
+}
+new EventSource("/events").onmessage = (e) => render(JSON.parse(e.data));
+</script>
+</body>
+</html>
