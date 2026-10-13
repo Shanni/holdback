@@ -7,20 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet">
-<script>
-// skin + accent before first paint: ?skin=console|bright, ?band=<hex>; remembered per viewer
-(() => {
-  const q = new URLSearchParams(location.search), r = document.documentElement;
-  const get = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-  const skin = q.get("skin") || get("holdback.skin") || "bright";
-  const band = q.get("band") || get("holdback.band");
-  r.dataset.skin = skin === "console" ? "console" : "bright";
-  if (band && /^#?[0-9a-f]{6}$/i.test(band)) r.style.setProperty("--band", band[0] === "#" ? band : "#" + band);
-})();
-</script>
+<script>document.documentElement.dataset.skin = "bright";</script>
 <style>
   :root {
-    --r-lg: 8px; --r-md: 6px; --r-sm: 4px; --r-btn: 6px; --r-pill: 4px; --display: var(--sans); --band: #8fd3ff;
+    --r-lg: 8px; --r-md: 6px; --r-sm: 4px; --r-btn: 6px; --r-pill: 4px; --display: var(--sans); --band: #c7b5ff;
     --canvas: #f3f4f6; --surface: #ffffff; --sunken: #f8f9fb; --ink: #101828; --ink-2: #344054; --muted: #667085;
     --line: #e4e7ec; --line-strong: #d0d5dd; --focus: #3559e0; --ring: rgba(53, 89, 224, .18);
     --agent: #eef2ff; --agent-line: #d6defc;
@@ -217,13 +207,6 @@
   .rail .st.live { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
   .rail .rd { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
-  /* theme switch */
-  .skinctl { display: flex; align-items: center; gap: 10px; }
-  .swatches { display: inline-flex; gap: 5px; }
-  .swatches button { width: 18px; height: 18px; border-radius: 50%; padding: 0; cursor: pointer; background: var(--sw); border: 1px solid rgba(0, 0, 0, .25); }
-  .swatches button.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--ink); }
-  :root[data-skin="console"] .swatches { display: none; }
-
   /* Bright skin: one bright band colour, square hairline boxes, pill controls, thin display serif */
   :root[data-skin="bright"] {
     --r-lg: 0; --r-md: 0; --r-sm: 0; --r-btn: 999px; --r-pill: 999px;
@@ -267,11 +250,6 @@
   [data-skin="bright"] .meta { background: transparent; border-color: var(--band-line); color: var(--on-band); }
   [data-skin="bright"] .meta .dot.on { background: #0a7d3e; box-shadow: none; }
   [data-skin="bright"] .topbar .btn, [data-skin="bright"] .band .btn { background: #000; border-color: #000; color: #fff; }
-  [data-skin="bright"] .topbar .seg { background: transparent; border-color: var(--band-line); }
-  [data-skin="bright"] .topbar .seg button { color: var(--band-muted); }
-  [data-skin="bright"] .topbar .seg button.on { background: #000; color: #fff; box-shadow: none; }
-  [data-skin="bright"] .swatches button { border-color: rgba(0, 0, 0, .4); }
-  [data-skin="bright"] .swatches button.on { box-shadow: 0 0 0 2px var(--band), 0 0 0 3px #000; }
   [data-skin="bright"] .colhead h2 { font-family: var(--display); font-weight: 300; font-size: 30px; letter-spacing: -0.02em; }
   [data-skin="bright"] .colhead { margin-bottom: 14px; }
   [data-skin="bright"] .title h2 { font-family: var(--display); font-weight: 400; font-size: 24px; letter-spacing: -0.015em; }
@@ -335,16 +313,6 @@
       <span>Holdback</span><span class="crumb">Gallery</span>
     </div>
     <div class="hright">
-      <div class="skinctl" id="skinctl">
-        <span class="seg" role="group" aria-label="Theme"><button type="button" data-skin="bright">Bright</button><button type="button" data-skin="console">Console</button></span>
-        <span class="swatches" role="group" aria-label="Accent colour">
-          <button type="button" data-band="#8fd3ff" style="--sw:#8fd3ff" aria-label="Sky"></button>
-          <button type="button" data-band="#7dffb8" style="--sw:#7dffb8" aria-label="Mint"></button>
-          <button type="button" data-band="#c7b5ff" style="--sw:#c7b5ff" aria-label="Lilac"></button>
-          <button type="button" data-band="#ff9b85" style="--sw:#ff9b85" aria-label="Coral"></button>
-          <button type="button" data-band="#ffb547" style="--sw:#ffb547" aria-label="Tangerine"></button>
-        </span>
-      </div>
       <div class="meta" id="meta"><span class="dot"></span>Connecting…</div>
       <div class="step" id="scenario"></div>
       <div class="step" id="step"></div>
@@ -853,22 +821,6 @@ async function nextScene() {
   finally { b.disabled = false; }
 }
 $("nextBtn").onclick = nextScene;
-
-// theme switch: skin and accent colour, remembered per viewer (set before paint in <head>)
-function syncSkinCtl() {
-  const r = document.documentElement;
-  const band = getComputedStyle(r).getPropertyValue("--band").trim().toLowerCase();
-  for (const b of document.querySelectorAll("#skinctl [data-skin]")) b.classList.toggle("on", b.dataset.skin === r.dataset.skin);
-  for (const b of document.querySelectorAll("#skinctl [data-band]")) b.classList.toggle("on", b.dataset.band === band);
-}
-$("skinctl").addEventListener("click", (e) => {
-  const r = document.documentElement;
-  const s = e.target.closest("[data-skin]"), c = e.target.closest("[data-band]");
-  if (s) { r.dataset.skin = s.dataset.skin; lsSet("holdback.skin", s.dataset.skin); }
-  if (c) { r.style.setProperty("--band", c.dataset.band); lsSet("holdback.band", c.dataset.band); }
-  if (s || c) syncSkinCtl();
-});
-syncSkinCtl();
 document.addEventListener("keydown", (e) => {
   if (e.code !== "Space" || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
   const t = document.activeElement;

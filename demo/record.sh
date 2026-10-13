@@ -15,7 +15,7 @@ RPC=http://127.0.0.1:8899
 PORT=${PORT:-4022}
 LOGS=${TMPDIR:-/tmp}; LOGS=${LOGS%/}
 LEDGER=${LEDGER:-$LOGS/holdback-ledger}
-GALLERY="http://localhost:$PORT/?skin=bright&band=${BAND:-8fd3ff}&theme=light"
+GALLERY="http://localhost:$PORT/?theme=light"
 EXPLORER="https://explorer.solana.com/?cluster=custom&customUrl=$(printf %s "$RPC" | sed 's/:/%3A/g; s#/#%2F#g')"
 ROBINHOOD="https://explorer.testnet.chain.robinhood.com/address/0xED594057c6350D622d95a19e7FE96f0565E1E7dF"
 
