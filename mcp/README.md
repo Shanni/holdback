@@ -24,8 +24,8 @@ node mcp/server.mts
 |---|---|---|
 | `list_items` | – | All NFTs with mechanism (offers / auction / dutch / buy-now), ask and status |
 | `get_item` | `id` | Details, the seller's reasoning, auction state, your negotiation and holds. Viewing registers you as a watcher, which can change the mechanism |
-| `make_offer` | `id, amount` | Places an offer as a **hold**. The seller replies at once with accept (captured, NFT delivered), counter (hold stays held) or decline (refunded). To counter, call it again with a new amount; the previous hold is refunded |
-| `respond_to_counter` | `id, action: accept \| walk_away` | `accept` buys at the seller's last counter (new hold captured, old one refunded, in one tx). `walk_away` refunds the hold |
+| `make_offer` | `id, amount, message?` | Places an offer as a **hold**. The seller replies at once with accept (captured, NFT delivered), counter (hold stays held) or decline (refunded). To counter, call it again with a new amount; the previous hold is refunded |
+| `respond_to_counter` | `id, action: accept \| walk_away, message?` | `accept` buys at the seller's last counter (new hold captured, old one refunded, in one tx). `walk_away` refunds the hold |
 | `place_bid` | `id, max` | Proxy bid that holds `max`. The winner pays the 2nd-highest max + 1 and never more than `max`. Losers are refunded |
 | `buy_now` | `id` | Buys at the buy-now price or the current Dutch price, captured right away |
 | `my_holds` | – | Balance plus every hold (held / captured / refunded) with explorer tx links |
@@ -38,6 +38,9 @@ places one proxy bid at the budget.
 **Owner limit:** any offer, bid, buy or counter-acceptance above `OWNER_MAX` is refused before it reaches
 the market. The refusal reads like this: *"Refused: offering 140 dUSDC is above your owner's limit of 90 dUSDC
 (OWNER_MAX)…"*
+
+`message` (optional, ≤280 chars) is a note to the seller; the seller agent answers it, and the reply is shown first
+(`>> Seller: …`) together with how the seller read the note.
 
 Each tool returns a short human-readable summary first, then `---` and the raw JSON.
 

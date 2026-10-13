@@ -65,15 +65,19 @@
   .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
 
   .sub { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
-  .thread { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; margin-bottom: 6px; font-size: 13px; display: grid; gap: 4px; }
-  .turn { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
-  .turn.s { justify-content: flex-end; text-align: right; }
-  .turn .who { font-weight: 600; }
-  .turn .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .thread { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 6px; font-size: 13px; display: grid; gap: 8px; }
+  .turn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+  .turn.s { align-items: flex-end; text-align: right; }
+  .turn .head { display: flex; flex-wrap: wrap; gap: 3px 6px; align-items: center; font-size: 11px; color: var(--muted); }
+  .turn.s .head { justify-content: flex-end; }
+  .turn .who { font-weight: 600; color: var(--ink); }
+  .turn .amt { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .turn .readtag { font-size: 10px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); }
   .bubble { padding: 4px 9px; border-radius: 12px; background: var(--soft); max-width: 100%; }
-  .turn.s .bubble { background: var(--accent); color: var(--on-accent); }
-  .turn .msg { flex-basis: 100%; color: var(--muted); font-size: 12px; }
-  .turn.s .msg { text-align: right; }
+  .turn .bubble { max-width: 88%; padding: 6px 10px; border-radius: 14px 14px 14px 4px; overflow-wrap: anywhere; text-align: left; }
+  .turn.s .bubble { background: var(--accent); color: var(--on-accent); border-radius: 14px 14px 4px 14px; }
+  .chat { margin-top: 10px; display: grid; gap: 8px; font-size: 13px; max-height: 300px; overflow-y: auto; }
+  .chat:empty { display: none; }
   .deal { color: var(--cap); font-weight: 700; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
   .tablewrap { overflow-x: auto; }
@@ -97,6 +101,14 @@
   .row { display: flex; gap: 8px; margin-top: 8px; }
   .row input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); }
   .row input:disabled { opacity: .5; }
+  .msgbox { margin-top: 10px; }
+  .msgbox label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .msgbox input { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); }
+  .msgbox input:disabled { opacity: .5; }
+  .qchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .qchip { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
+  .qchip:hover:not(:disabled) { border-color: var(--muted); }
+  .qchip:disabled { opacity: .45; cursor: not-allowed; }
   .btn { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); border-radius: 9px; padding: 7px 12px; cursor: pointer; font-weight: 600; white-space: nowrap; }
   .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
   .btn.small { padding: 3px 9px; font-size: 12px; border-radius: 7px; }
@@ -169,11 +181,20 @@
       <h3>You</h3>
       <div class="me-line"><span id="meName" class="muted">Creating your wallet…</span><span><span class="bal" id="meBal">–</span> <span class="muted">dUSDC</span></span></div>
       <div class="selitem" id="selItem"><span class="muted">Tap an item to trade on it.</span></div>
+      <div class="msgbox"><label for="msgTxt">Message to the seller (optional)</label>
+        <input id="msgTxt" type="text" maxlength="280" autocomplete="off" placeholder="Explain your offer, or ask about the piece">
+        <div class="qchips" id="qchips" aria-label="Quick messages">
+          <button type="button" class="qchip" data-fill="I'm a student — any flexibility?">I'm a student — any flexibility?</button>
+          <button type="button" class="qchip" data-fill="Huge fan of this series!">Huge fan of this series!</button>
+          <button type="button" class="qchip" data-fill="Would you do a bundle?">Would you do a bundle?</button>
+        </div>
+      </div>
       <div class="row"><input id="offerAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="Offer amount" aria-label="Offer amount"><button class="btn" id="bOffer">Make offer</button></div>
       <div class="row"><button class="btn ghost grow" id="bAccept">Accept counter</button><button class="btn ghost grow" id="bWalk">Walk away</button></div>
       <div class="row"><input id="bidMax" type="number" min="1" step="1" inputmode="numeric" placeholder="Your max bid" aria-label="Max bid"><button class="btn" id="bBid">Place bid</button></div>
       <div class="row"><button class="btn grow" id="bBuy">Buy now</button></div>
       <div class="hint" id="hint"></div>
+      <div class="chat" id="chat" aria-live="polite"></div>
       <div class="reply" id="reply"></div>
       <div class="err" id="err" role="alert"></div>
       <div class="sub">Your holds</div>
@@ -290,23 +311,29 @@ function threads(it) {
     const shown = turns.slice(-8);
     let hi = turns.slice(0, turns.length - shown.length).filter(isHoldTurn).length;
     const rows = shown.map((t) => {
-      const amt = `<span class="amt">${fmt(t.amount)}</span>`;
-      const msg = t.message ? `<div class="msg">${esc(t.message)}</div>` : "";
-      if (t.from === "buyer") {
-        let c = "";
-        if (isHoldTurn(t)) { const h = hs[hi++]; if (h) c = chip(h.status); }
-        const you = who === "You";
-        const verb = (you ? { offer: `offer ${amt}`, accept: `accept ${amt}`, walk_away: "walk away", decline: "decline", counter: `counter ${amt}` }
-          : { offer: `offers ${amt}`, accept: `accepts ${amt}`, walk_away: "walks away", decline: "declines", counter: `counters ${amt}` })[t.action] || esc(t.action);
-        return `<div class="turn b"><span class="bubble"><span class="who">${esc(who)}</span> ${verb}</span>${c}${msg}</div>`;
-      }
-      const verb = { counter: `counters ${amt}`, accept: `✅ accepts ${amt}`, decline: `declines${t.amount ? ` · ask ${amt}` : ""}`, walk_away: "ends talks", offer: `offers ${amt}` }[t.action] || esc(t.action);
-      return `<div class="turn s"><span class="bubble"><span class="who">Seller</span> ${verb}</span>${msg}</div>`;
+      let c = "";
+      if (isHoldTurn(t)) { const h = hs[hi++]; if (h) c = chip(h.status); }
+      return turnHTML(t, who, c);
     }).join("");
     const deal = it.status === "sold" && it.soldTo != null && displayName(it.soldTo) === who
       ? `<div class="deal">✅ Deal at ${fmt(it.soldFor)} dUSDC ${txLink(it.saleTx)}</div>` : "";
     return `<div class="thread">${rows}${deal}</div>`;
   }).join("");
+}
+
+// one negotiation turn as a chat bubble: small header (who · action · amount), then the message
+function turnHTML(t, who, extra = "") {
+  const amt = `<span class="amt">${fmt(t.amount)}</span>`;
+  const body = t.message ? `<div class="bubble">${esc(t.message)}</div>` : "";
+  if (t.from === "buyer") {
+    const you = who === "You";
+    const verb = (you ? { offer: `offer ${amt}`, accept: `accept ${amt}`, walk_away: "walk away", decline: "decline", counter: `counter ${amt}` }
+      : { offer: `offers ${amt}`, accept: `accepts ${amt}`, walk_away: "walks away", decline: "declines", counter: `counters ${amt}` })[t.action] || esc(t.action);
+    return `<div class="turn b"><div class="head"><span class="who">${esc(who)}</span> ${verb} ${extra}</div>${body}</div>`;
+  }
+  const verb = { counter: `counters ${amt}`, accept: `✅ accepts ${amt}`, decline: `declines${t.amount ? ` · ask ${amt}` : ""}`, walk_away: "ends talks", offer: `offers ${amt}` }[t.action] || esc(t.action);
+  const read = t.read && t.read.length ? `<span class="readtag" title="What the seller agent picked up from the message">read: ${esc(t.read.map((x) => x.replace("_", " ")).join(", "))}</span>` : "";
+  return `<div class="turn s"><div class="head">${read}<span class="who">Seller</span> ${verb}</div>${body}</div>`;
 }
 
 function holdsTable(it) {
@@ -405,10 +432,6 @@ function myTurns(it) {
   const n = it.negotiations || {};
   return n[me.name] || n[me.id] || [];
 }
-function replyHTML(t) {
-  const verb = { counter: `counters at <b>${fmt(t.amount)}</b>`, accept: `✅ accepts <b>${fmt(t.amount)}</b>`, decline: `declines${t.amount ? ` (asks ${fmt(t.amount)})` : ""}`, walk_away: "ends talks" }[t.action] || esc(t.action);
-  return `<span class="bubble"><b>Seller</b> ${verb}${t.message ? ` · ${esc(t.message)}` : ""}</span>`;
-}
 function renderYou() {
   const b = me && S && (S.buyers || []).find((x) => x.id === me.id);
   if (me) {
@@ -426,6 +449,8 @@ function renderYou() {
   const ok = !!me && listed;
   const can = { offer: ok && m === "offers" && it.kind !== "digital", bid: ok && m === "auction", buy: ok && (m === "buy-now" || m === "dutch" || m === "offers") };
   $("bOffer").disabled = $("offerAmt").disabled = !can.offer;
+  $("msgTxt").disabled = !can.offer;
+  for (const q of document.querySelectorAll(".qchip")) q.disabled = !can.offer;
   $("bAccept").disabled = !(can.offer && counter);
   $("bAccept").textContent = counter ? `Accept counter · ${fmt(counter.amount)}` : "Accept counter";
   $("bWalk").disabled = !(can.offer && (counter || myHeld.length));
@@ -444,8 +469,9 @@ function renderYou() {
     : m === "dutch" ? "The price falls over time. Buying captures the current price at once."
     : it.guarantee ? `Fixed price with a ${it.guarantee} guarantee: your payment stays held and you can reclaim it yourself.`
     : "Fixed price. Buying captures at once, with NFT delivery.";
+  const chatEl = $("chat");
+  if (setHTML(chatEl, turns.length ? turns.slice(-10).map((t) => turnHTML(t, t.from === "buyer" ? "You" : "Seller")).join("") : "", "chat")) chatEl.scrollTop = chatEl.scrollHeight;
   let rep = it && actionNote[it.id];
-  if (!rep && last && last.from === "seller") rep = replyHTML(last);
   setHTML($("reply"), rep || "");
   const mine = [];
   for (const x of (S && S.items) || []) for (const h of x.holds || []) if (isMine(h)) mine.push([x, h]);
@@ -518,6 +544,9 @@ async function act(fn) {
   finally { renderYou(); }
 }
 const note = (id, html) => { actionNote[id] = html; };
+// optional free-text note for the seller (Make offer / Accept counter / Walk away); cleared once sent
+const withMsg = (body) => { const m = $("msgTxt").value.trim().slice(0, 280); return m ? { ...body, message: m } : body; };
+const sentMsg = () => { $("msgTxt").value = ""; };
 
 function select(id, fetchIt = true) {
   if (selected !== id) { selected = id; lsSet(LS_SEL, id); $("offerAmt").value = ""; $("bidMax").value = ""; $("err").textContent = ""; }
@@ -543,20 +572,23 @@ $("listings").addEventListener("click", (e) => {
 $("bOffer").onclick = () => act(async () => {
   const it = selItem(); const amount = Math.round(Number($("offerAmt").value));
   if (!amount || amount <= 0) throw new Error("Enter an offer amount.");
-  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/offer`, { buyerId: me.id, amount });
-  note(it.id, r && r.reply ? replyHTML(r.reply) : `Offer of ${fmt(amount)} held.`);
+  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/offer`, withMsg({ buyerId: me.id, amount }));
+  sentMsg();
+  note(it.id, r && r.reply ? (r.reply.action === "decline" ? "Your hold was released (refunded)." : "") : `Offer of ${fmt(amount)} held.`);
   $("offerAmt").value = "";
 });
 $("bAccept").onclick = () => act(async () => {
   const it = selItem();
-  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, { buyerId: me.id, action: "accept" });
+  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, withMsg({ buyerId: me.id, action: "accept" }));
+  sentMsg();
   const h = r && r.hold;
   note(it.id, `<span class="bubble">✅ You bought it${h ? ` for <b>${fmt(h.captured ?? h.amount)}</b> dUSDC` : ""}</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
 });
 $("bWalk").onclick = () => act(async () => {
   const it = selItem();
-  const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, { buyerId: me.id, action: "walk_away" });
-  note(it.id, `You walked away; your hold is refunded.${r && r.reply && r.reply.message ? ` <span class="muted">Seller: ${esc(r.reply.message)}</span>` : ""}`);
+  await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, withMsg({ buyerId: me.id, action: "walk_away" }));
+  sentMsg();
+  note(it.id, `You walked away; your hold is refunded.`);
 });
 $("bBid").onclick = () => act(async () => {
   const it = selItem(); const max = Math.round(Number($("bidMax").value));
@@ -577,6 +609,11 @@ $("myHolds").addEventListener("click", (e) => {
   b.disabled = true;
   act(async () => { await api("POST", `/api/holds/${encodeURIComponent(b.dataset.reclaim)}/reclaim`, { buyerId: me.id }); });
 });
+$("qchips").addEventListener("click", (e) => {
+  const q = e.target.closest("[data-fill]"); if (!q || q.disabled) return;
+  $("msgTxt").value = q.dataset.fill; $("msgTxt").focus();
+});
+$("msgTxt").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("bOffer").disabled && $("offerAmt").value) $("bOffer").click(); });
 $("offerAmt").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("bOffer").disabled) $("bOffer").click(); });
 $("bidMax").addEventListener("keydown", (e) => { if (e.key === "Enter" && !$("bBid").disabled) $("bBid").click(); });
 

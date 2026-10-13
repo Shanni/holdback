@@ -56,6 +56,9 @@ A human or MCP buyer can join at any time: `POST /api/buyers`, then offer / resp
 - `GET /api/state` (same snapshot as `/events`), `GET /api/buyers`.
 - Item: `kind`, `guarantee`, `listing`, `nft`, `auction.price` (current 2nd-price), `auction.closed`.
 - Snapshot: `seller {name, wallet, balance}`, `scenario {mode, scene, total, running, next}`, `rails`.
-- Offer/respond bodies accept an optional `message` (shown as the buyer's turn text).
+- Offer/respond bodies accept an optional `message` (≤280 chars): the seller agent reads it locally (rule-based
+  `readMessage`, no LLM, nothing on-chain), answers it in its reply, and nudges its concession within the floor
+  (hardship faster, enthusiasm firmer, rude none). Seller turns carry `read: Intent[]`. See "Buyer messages" in `demo/API.md`.
+  The Gallery's You panel has a message box with three quick chips; messages show as chat bubbles.
 - `Hold.tx` / `settleTx` and log `tx` are explorer URLs.
 - Seller accepts an offer within 3% of ask of its standing counter ("close enough").

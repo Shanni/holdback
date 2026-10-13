@@ -68,6 +68,20 @@ try {
   check(!r1.isError && r1.json.reply.action === "counter", `first offer ${amount} → seller counters (${r1.json?.reply?.action} ${r1.json?.reply?.amount})`);
   check(r1.json?.hold?.status === "held", "first offer is HELD in escrow");
 
+  // free-text message: the seller's reply references it and still names a price
+  if (r1.json?.reply?.action === "counter" && r1.json.reply.amount > amount + 1) {
+    const note = "I'm a student, any flexibility? Huge fan of this series.";
+    const withMsg = await call("make_offer", { id: target.id, amount: amount + 1, message: note });
+    const turns = withMsg.json?.item?.negotiations ? Object.values(withMsg.json.item.negotiations).flat() as any[] : [];
+    check(!withMsg.isError && turns.some((t) => t.from === "buyer" && t.message === note), "message stored as the buyer's turn");
+    const said = String(withMsg.json?.reply?.message ?? "");
+    check(/student|fan/i.test(said) && withMsg.human.includes(">> Seller:"), `seller reply references the message: "${said}"`);
+    check(said.includes(String(withMsg.json?.reply?.amount)), "seller reply still states the number");
+    const long = await call("make_offer", { id: target.id, amount: amount + 1, message: "x".repeat(281) });
+    check(long.isError, "message over 280 chars rejected by the tool schema");
+    amount += 1; r1 = withMsg;
+  }
+
   // counter-offer by calling make_offer again (midpoint) until the counter is within the owner's limit
   let last = r1;
   for (let round = 0; round < 4 && last.json?.reply?.action === "counter" && (round === 0 || last.json.reply.amount > OWNER_MAX); round++) {

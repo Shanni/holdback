@@ -17,6 +17,7 @@ type Hold = {
 type Turn = {
   from: "buyer" | "seller"; buyer: string; amount: number;
   action: "offer" | "counter" | "accept" | "decline" | "walk_away"; message: string; at: string;
+  read?: string[];
 };
 type Item = {
   id: string; name: string; hue: number; image?: string;
@@ -105,6 +106,15 @@ function lastTurns(it: Item, name: string, n = 4): string {
     `  ${t.from === "buyer" ? "you" : "seller"}: ${t.action} ${usd(t.amount)} — "${t.message}"`).join("\n");
 }
 
+const messageArg = z.string().max(280).optional().describe(
+  "Optional note to the seller (≤280 chars), e.g. why you're offering this price, that you're a fan or on a budget, or a question about the piece. The seller agent reads it and answers.",
+);
+/** The seller's reply, shown prominently. */
+function sellerSays(r: Turn): string {
+  const price = r.action === "accept" ? `ACCEPTS at ${usd(r.amount)}` : r.action === "decline" ? `DECLINES (asks ${usd(r.amount)})` : `COUNTERS at ${usd(r.amount)}`;
+  return `SELLER ${price}\n>> Seller: ${r.message}${r.read?.length ? `\n   (the seller read your note as: ${r.read.join(", ")})` : ""}`;
+}
+
 function result(text: string, json: unknown) {
   return { content: [{ type: "text" as const, text: `${text}\n\n---\n${JSON.stringify(json, null, 2)}` }] };
 }
@@ -180,18 +190,19 @@ server.registerTool("make_offer", {
     "The seller agent replies at once: ACCEPT (the hold is captured and the NFT delivered — you bought it), COUNTER (your hold stays held; the seller names a price), " +
     "or DECLINE (your hold is refunded). To counter the seller's counter, call make_offer again with a new amount — the new offer replaces your previous one and the old hold is refunded. " +
     "To take the seller's counter as-is, use respond_to_counter(id, 'accept'); to quit, respond_to_counter(id, 'walk_away'). " +
-    `Sellers concede more each round, so start below the ask and move up gradually. Never exceed your owner's limit of ${OWNER_MAX} dUSDC.`,
+    `Sellers concede more each round, so start below the ask and move up gradually. Never exceed your owner's limit of ${OWNER_MAX} dUSDC. ` +
+    "You can explain yourself with an optional `message` (≤280 chars): the seller agent reads it and replies to it. Be honest and polite: a genuine budget constraint can earn a slightly bigger concession, rudeness earns none, and you can ask about the piece (edition, escrow, guarantee).",
   inputSchema: {
     id: z.string().describe("Item id"),
     amount: z.number().positive().describe(`Offer in whole dUSDC (max ${OWNER_MAX})`),
+    message: messageArg,
   },
-}, async ({ id, amount }) => {
+}, async ({ id, amount, message }) => {
   if (amount > OWNER_MAX) return overMax(amount, "offering");
   return guard(async () => {
     const b = await me();
-    const r = await api<{ hold: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/offer`, { buyerId: b.id, amount });
-    const lines = [`You offered ${usd(amount)} on ${r.item.name}.`, holdLine(r.hold)];
-    lines.push(`Seller ${r.reply.action.toUpperCase()}S${r.reply.action === "accept" ? "" : ` at ${usd(r.reply.amount)}`}: "${r.reply.message}"`);
+    const r = await api<{ hold: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/offer`, { buyerId: b.id, amount, ...(message ? { message } : {}) });
+    const lines = [sellerSays(r.reply), "", `You offered ${usd(amount)} on ${r.item.name}${message ? ` with the note "${message}"` : ""}.`, holdLine(r.hold)];
     if (r.reply.action === "counter") {
       lines.push(r.reply.amount > OWNER_MAX
         ? `Note: the counter (${usd(r.reply.amount)}) is above your owner's limit (${usd(OWNER_MAX)}). You can offer again up to ${OWNER_MAX} or walk away.`
@@ -211,12 +222,14 @@ server.registerTool("respond_to_counter", {
     "Answer the seller's latest counter-offer. 'accept' buys the item at the seller's counter price: a new hold is placed at that price, your old hold is refunded, " +
     "and payment is captured with NFT delivery in one transaction. 'walk_away' ends the negotiation and refunds your hold. " +
     "(To counter with a different price instead, call make_offer again with the new amount.) " +
-    `Will refuse to accept a counter above your owner's limit of ${OWNER_MAX} dUSDC.`,
+    `Will refuse to accept a counter above your owner's limit of ${OWNER_MAX} dUSDC. ` +
+    "Add an optional `message` (≤280 chars) to tell the seller why, e.g. why you're walking away; the seller replies to it.",
   inputSchema: {
     id: z.string().describe("Item id"),
     action: z.enum(["accept", "walk_away"]),
+    message: messageArg,
   },
-}, async ({ id, action }) => guard(async () => {
+}, async ({ id, action, message }) => guard(async () => {
   const b = await me();
   if (action === "accept") {
     const it = await api<Item>("GET", `/api/items/${encodeURIComponent(id)}`);
@@ -224,10 +237,12 @@ server.registerTool("respond_to_counter", {
     const lastCounter = [...turns].reverse().find((t) => t.from === "seller" && t.action === "counter");
     if (lastCounter && lastCounter.amount > OWNER_MAX) return overMax(lastCounter.amount, "accepting a counter of");
   }
-  const r = await api<{ hold?: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/respond`, { buyerId: b.id, action });
-  const lines = [action === "accept" ? `You accepted the seller's counter on ${r.item.name}.` : `You walked away from ${r.item.name}.`];
+  const r = await api<{ hold?: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/respond`, { buyerId: b.id, action, ...(message ? { message } : {}) });
+  const lines = [
+    `>> Seller: ${r.reply.message}${r.reply.read?.length ? `\n   (the seller read your note as: ${r.reply.read.join(", ")})` : ""}`, "",
+    (action === "accept" ? `You accepted the seller's counter on ${r.item.name}` : `You walked away from ${r.item.name}`) + (message ? ` with the note "${message}".` : "."),
+  ];
   if (r.hold) lines.push(holdLine(r.hold));
-  lines.push(`Seller: "${r.reply.message}"`);
   if (r.item.status === "sold" && r.item.soldTo === b.name) {
     lines.push(`You own ${r.item.name} — paid ${usd(r.item.soldFor)}.${r.item.saleTx ? ` Sale tx: ${r.item.saleTx}` : ""}`);
   }
@@ -319,6 +334,7 @@ server.registerPrompt("buy_for_me", {
         type: "text" as const,
         text:
 `Buy "${item}" for me on the Holdback market. My budget is ${cap} dUSDC — never commit more than that.
+You may add a short, honest, polite message to your offers (e.g. that you're on a budget or a fan of the series); the seller agent reads it and replies.
 
 How to do it:
 1. list_items, find the item, then get_item to see how it is sold (the mechanism can change as other buyers watch).

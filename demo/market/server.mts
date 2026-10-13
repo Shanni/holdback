@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import type { Keypair, PublicKey } from "@solana/web3.js";
 import { Chain, holds, presets, chainError, type Policy } from "./chain.mts";
 import { chooseMechanism, settleAuction, dutchPrice } from "../mechanism.mts";
-import { sellerReply, type Goal } from "./negotiation.mts";
+import { sellerReply, sellerNote, type Goal } from "./negotiation.mts";
 import { createScenario } from "./scenario.mts";
 
 const PORT = Number(process.env.PORT ?? 4022);
@@ -35,6 +35,7 @@ type Hold = {
 type Turn = {
   from: "buyer" | "seller"; buyer: string; amount: number;
   action: "offer" | "counter" | "accept" | "decline" | "walk_away"; message: string; at: string;
+  read?: string[];   // seller turns: intents the seller agent picked up from the buyer's message
 };
 type Item = {
   id: string; name: string; hue: number; image?: string;
@@ -350,6 +351,15 @@ async function createBuyer(body: any): Promise<Buyer> {
 }
 const creating = new Map<string, Promise<Buyer>>();
 
+/** Optional free-text note from the buyer (≤280 chars). Read locally by the seller agent; never sent anywhere. */
+function buyerMessage(body: any): string | undefined {
+  const m = body?.message;
+  if (m === undefined || m === null) return undefined;
+  const t = String(m).replace(/\s+/g, " ").trim().slice(0, 280);
+  return t || undefined;
+}
+const facts = (it: Item) => ({ name: it.name, kind: it.kind, guarantee: it.guarantee });
+
 async function offer(lot: Lot, body: any) {
   const b = buyerOr400(body?.buyerId);
   const amount = amountOr400(body?.amount);
@@ -363,11 +373,12 @@ async function offer(lot: Lot, body: any) {
   if (prev) await voidHold(holdById.get(prev)!, "replaced by a new offer");
   const h = await newHold(b, lot, "offer", amount, holds.offer(lot.listing!, 86400), "offer");
   lot.offers.set(b.pub.id, h.pub.id);
-  turn(lot, { from: "buyer", buyer: b.pub.name, amount, action: "offer", message: String(body?.message ?? `I offer ${amount} dUSDC (held in escrow).`).slice(0, 280) });
+  const said = buyerMessage(body);
+  turn(lot, { from: "buyer", buyer: b.pub.name, amount, action: "offer", message: said ?? `I offer ${amount} dUSDC (held in escrow).` });
   const round = turns(lot, b.pub.name).filter((t) => t.from === "buyer" && t.action === "offer").length;
-  const r = sellerReply({ offer: amount, ask: it.ask, floor: lot.floor, goal: it.goal, round, lastCounter: lot.counters.get(b.pub.id) });
-  const reply = turn(lot, { from: "seller", buyer: b.pub.name, amount: r.amount, action: r.action, message: r.message });
-  say("Seller agent", `→ ${b.pub.name} (round ${round}): ${r.message}`);
+  const r = sellerReply({ offer: amount, ask: it.ask, floor: lot.floor, goal: it.goal, round, lastCounter: lot.counters.get(b.pub.id), message: said, item: facts(it) });
+  const reply = turn(lot, { from: "seller", buyer: b.pub.name, amount: r.amount, action: r.action, message: r.message, ...(r.read ? { read: r.read } : {}) });
+  say("Seller agent", `→ ${b.pub.name} (round ${round}${r.read ? `, read: ${r.read.join(", ")}` : ""}): ${r.message}`);
   if (r.action === "accept") await sell(lot, h, r.amount, `sold to ${b.pub.name}`);
   else if (r.action === "decline") { lot.counters.set(b.pub.id, it.ask); await voidHold(h, "offer below what the seller will take"); }
   else lot.counters.set(b.pub.id, r.amount);
@@ -383,7 +394,8 @@ async function respond(lot: Lot, body: any) {
   const prevId = lot.offers.get(b.pub.id);
   const prev = prevId ? holdById.get(prevId) : undefined;
   if (action === "walk_away") {
-    turn(lot, { from: "buyer", buyer: b.pub.name, amount: prev?.pub.amount ?? 0, action: "walk_away", message: String(body?.message ?? "I'll pass.").slice(0, 280) });
+    const said = buyerMessage(body);
+    turn(lot, { from: "buyer", buyer: b.pub.name, amount: prev?.pub.amount ?? 0, action: "walk_away", message: said ?? "I'll pass." });
     if (prev) {
       const sig = await chain.reclaim(b.kp, prev.payment);
       prev.pub.status = "refunded";
@@ -392,7 +404,8 @@ async function respond(lot: Lot, body: any) {
       say(b.pub.name, `walks away from ${it.name} and takes back the ${prev.pub.amount} dUSDC offer hold`, sig);
     } else say(b.pub.name, `walks away from ${it.name}`);
     const standing = lot.counters.get(b.pub.id) ?? it.ask;
-    const reply = turn(lot, { from: "seller", buyer: b.pub.name, amount: standing, action: "counter", message: `No problem. ${standing} dUSDC stands if you change your mind.` });
+    const n = sellerNote(said, "walk_away", standing, facts(it));
+    const reply = turn(lot, { from: "seller", buyer: b.pub.name, amount: standing, action: "counter", message: n.message, ...(n.read.length ? { read: n.read } : {}) });
     return { hold: prev?.pub, reply, item: it };
   }
   if (it.mechanism === "auction") throw bad(`${it.name} is in an auction now: place a bid instead`);
@@ -400,8 +413,10 @@ async function respond(lot: Lot, body: any) {
   if (price === undefined) throw bad(`no counter-offer from the seller to accept yet: make an offer first`);
   if (prev) await voidHold(prev, "replaced by the accepted price");
   const h = await newHold(b, lot, "offer", price, holds.offer(lot.listing!, 86400), "offer");
-  turn(lot, { from: "buyer", buyer: b.pub.name, amount: price, action: "accept", message: String(body?.message ?? `Deal at ${price}.`).slice(0, 280) });
-  const reply = turn(lot, { from: "seller", buyer: b.pub.name, amount: price, action: "accept", message: `Deal at ${price} dUSDC. The NFT is yours.` });
+  const said = buyerMessage(body);
+  turn(lot, { from: "buyer", buyer: b.pub.name, amount: price, action: "accept", message: said ?? `Deal at ${price}.` });
+  const n = sellerNote(said, "accept", price, facts(it));
+  const reply = turn(lot, { from: "seller", buyer: b.pub.name, amount: price, action: "accept", message: n.message, ...(n.read.length ? { read: n.read } : {}) });
   await sell(lot, h, price, `sold to ${b.pub.name}`);
   return { hold: h.pub, reply, item: it };
 }

@@ -45,6 +45,9 @@ export function makeMarket() {
   const item = (id: string) => { const it = items.find((i) => i.id === id); if (!it) throw new Error(`no item ${id}`); return it; };
   const buyer = (id: string) => { const b = buyers.find((x) => x.id === id); if (!b) throw new Error(`no buyer ${id}`); return b; };
   const listed = (it: Item) => { if (it.status !== "listed") throw new Error(`${it.name} is ${it.status}`); };
+  // Optional buyer note (≤280 chars): the mock seller quotes it back in its reply.
+  const note = (body: any) => (typeof body?.message === "string" && body.message.trim() ? body.message.trim().slice(0, 280) : undefined);
+  const ack = (msg: string | undefined) => (msg ? `You said "${msg.length > 60 ? msg.slice(0, 57) + "..." : msg}", noted. ` : "");
 
   async function handle(method: string, path: string, q: URLSearchParams, body: any): Promise<unknown> {
     let m: RegExpMatchArray | null;
@@ -70,7 +73,8 @@ export function makeMarket() {
       it.holds.filter((h) => h.buyer === b.name && h.kind === "offer").forEach((h) => refund(h, b));
       const h = place(it, b, "offer", amount);
       const turns = (it.negotiations[b.name] ??= []);
-      turns.push({ from: "buyer", buyer: b.name, amount, action: "offer", message: `I offer ${amount}.`, at: now() });
+      const msg = note(body);
+      turns.push({ from: "buyer", buyer: b.name, amount, action: "offer", message: msg ?? `I offer ${amount}.`, at: now() });
       const round = turns.filter((t) => t.from === "seller").length;
       const floor = floors[it.id];
       let reply: Turn;
@@ -86,6 +90,7 @@ export function makeMarket() {
         if (counter <= amount) { capture(it, b, h, amount); reply = { from: "seller", buyer: b.name, amount, action: "accept", message: `Fine — ${amount} it is.`, at: now() }; }
         else reply = { from: "seller", buyer: b.name, amount: counter, action: "counter", message: `I can do ${counter}.`, at: now() };
       }
+      reply.message = ack(msg) + reply.message;
       turns.push(reply);
       return { hold: h, reply, item: it };
     }
@@ -93,9 +98,11 @@ export function makeMarket() {
       const it = item(m[1]); listed(it); const b = buyer(body.buyerId);
       const turns = (it.negotiations[b.name] ??= []);
       const old = it.holds.filter((h) => h.buyer === b.name && h.kind === "offer" && h.status === "held");
+      const msg = note(body);
+      if (msg) turns.push({ from: "buyer", buyer: b.name, amount: 0, action: body.action === "accept" ? "accept" : "walk_away", message: msg, at: now() });
       if (body.action === "walk_away") {
         old.forEach((h) => refund(h, b));
-        const reply: Turn = { from: "seller", buyer: b.name, amount: 0, action: "walk_away", message: "Understood — your hold is refunded.", at: now() };
+        const reply: Turn = { from: "seller", buyer: b.name, amount: 0, action: "walk_away", message: ack(msg) + "Understood — your hold is refunded.", at: now() };
         turns.push(reply); return { hold: old[0], reply, item: it };
       }
       const last = [...turns].reverse().find((t) => t.from === "seller" && t.action === "counter");
@@ -103,7 +110,7 @@ export function makeMarket() {
       old.forEach((h) => refund(h, b));
       const h = place(it, b, "offer", last.amount);
       capture(it, b, h, last.amount);
-      const reply: Turn = { from: "seller", buyer: b.name, amount: last.amount, action: "accept", message: `Sold at ${last.amount}. Enjoy!`, at: now() };
+      const reply: Turn = { from: "seller", buyer: b.name, amount: last.amount, action: "accept", message: ack(msg) + `Sold at ${last.amount}. Enjoy!`, at: now() };
       turns.push(reply); return { hold: h, reply, item: it };
     }
     if (method === "POST" && (m = path.match(/^\/api\/items\/([^/]+)\/bid$/))) {
