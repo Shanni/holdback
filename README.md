@@ -1,5 +1,7 @@
 # Holdback
 
+> **Archived crypto version** (branch `crypto`): the Crypto World's Fair submission. Not maintained; see [docs/known-issues.md](docs/known-issues.md) for open bugs found in review.
+
 **Payment plans for the agent economy. Every offer, bid and purchase is a hold, captured only when the deal clears.**
 
 AI agents are starting to buy things. But a crypto payment is final, so an agent can't safely bid, negotiate, or get its money back when something is wrong. Card networks solve this with authorizations, captures and chargebacks, but only for merchants big enough to carry the risk.
@@ -65,6 +67,20 @@ solana-test-validator --reset --bpf-program 63hjwfJZ8vHLL97WgGezNhuJenF6orxETi2y
 node demo/market/server.mts      # open http://localhost:4022
 ```
 
+## Add it to a store
+
+The plugin is one script and one mount point. It renders in Shadow DOM, so the store's CSS can't break it,
+and it fires `holdback:hold`, `holdback:purchase` and `holdback:refund` events for the store to react to.
+
+```html
+<script src="https://YOUR-MARKET/holdback.js" defer></script>
+<div data-holdback-item="monkey-3"></div>
+```
+
+On Shopify it ships as a theme app extension (`demo/public/store/extension/`): the merchant adds the
+**Holdback offers & bids** block under Buy it now in the theme editor. Demo: `node demo/market/server.mts`, then
+open `http://localhost:4022/store/`.
+
 ## Repository
 
 | Path | What |
@@ -74,7 +90,9 @@ node demo/market/server.mts      # open http://localhost:4022
 | `tests/holdback.ts` | 12 end-to-end tests on a local validator |
 | `demo/mechanism.mts` | Seller agent: mechanism choice, offer response, second-price settlement, Dutch schedule |
 | `demo/market/` | Market server, negotiation engine, scripted buyer agents |
-| `demo/public/` | Gallery web page |
+| `demo/public/` | Gallery web page: listings and a holds ledger across every buyer |
+| `demo/public/holdback.js` | Embeddable widget: offers, bids and guaranteed buys as escrow holds on any product page |
+| `demo/public/store/` | Demo store in Shopify's default style with the widget installed, plus the Shopify theme app extension (`store/extension/`) |
 | `mcp/` | `holdback-market` MCP server for Claude and other agents |
 | `tempo/` | The same auth-capture escrow in Solidity, for Tempo and Robinhood Chain testnets |
 

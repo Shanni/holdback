@@ -46,6 +46,7 @@
     --accent: #eaecf0; --on-accent: #0b0f17; color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { overflow-x: hidden; }
   body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
   a { color: inherit; }
@@ -67,6 +68,8 @@
   .meta .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
   .meta .dot.on { background: var(--cap); box-shadow: 0 0 0 3px var(--cap-bg); }
   .next { display: flex; gap: 8px; align-items: center; }
+  a.storelink { display: inline-flex; align-items: center; text-decoration: none; }
+  [data-skin="bright"] .topbar a.storelink { background: transparent; color: #000; border-color: #000; }
   .step { font-size: 12px; color: var(--muted); max-width: 340px; }
   .step:empty { display: none; }
   kbd { font: 500 11px/1 var(--mono); padding: 2px 5px; border: 1px solid currentColor; border-radius: var(--r-sm); opacity: .6; margin-left: 6px; }
@@ -198,6 +201,32 @@
   .empty { color: var(--muted); font-size: 13px; }
   .wallets .empty, .log .empty { padding: 10px 16px; }
 
+  /* view tabs + holds ledger */
+  .vtabs { display: flex; gap: 18px; align-items: baseline; }
+  .vtabs button { border: 0; background: none; padding: 0 0 4px; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; }
+  .vtabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .vtabs button small { font-weight: 500; font-size: 12px; margin-left: 4px; color: var(--muted); font-family: var(--sans); }
+  .lfilters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+  .lfilters select { height: 30px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: var(--r-btn); background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; max-width: 100%; }
+  .lfilters .sum { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .ledgerbox { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
+  .ledgerbox .tablewrap { border: 0; border-radius: 0; }
+  table.ltable { min-width: 760px; }
+  .ltable th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; background: var(--sunken); }
+  .ltable th.num, .ltable td.num { text-align: right; }
+  .ltable td { padding: 9px 12px; }
+  .ltable td + td { width: auto; }
+  .ltable .itm { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .ltable .itm svg, .ltable .itm img { width: 28px; height: 28px; border-radius: var(--r-sm); flex: none; }
+  .ltable .out { color: var(--ink-2); white-space: nowrap; }
+  .ltable .out .muted { font-size: 12px; }
+  .ltable tr.mine td { background: var(--agent); }
+  .ltable tfoot td { border-top: 1px solid var(--line-strong); font-weight: 600; background: var(--sunken); }
+  .ltable .t { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .ledgerbox .empty { padding: 16px; }
+  [data-skin="bright"] .vtabs button { font-family: var(--display); font-weight: 300; font-size: 30px; letter-spacing: -0.02em; border-bottom-width: 1px; }
+  [data-skin="bright"] .lfilters select { border-color: var(--ink); }
+
   footer.wrap { padding-bottom: 40px; }
   .rails { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
   .rail { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; font-size: 13px; text-decoration: none; display: grid; gap: 2px; }
@@ -316,6 +345,7 @@
       <div class="meta" id="meta"><span class="dot"></span>Connecting…</div>
       <div class="step" id="scenario"></div>
       <div class="step" id="step"></div>
+      <a class="btn ghost storelink" href="/store/" target="_blank" rel="noopener" title="The same market, embedded in a Shopify-style store as a plugin">Store demo ↗</a>
       <div class="next"><button class="btn" id="nextBtn" title="Advance the scripted scenario">Next scene<kbd>Space</kbd></button></div>
     </div>
   </div>
@@ -329,8 +359,18 @@
 </section></div>
 <main class="wrap">
   <section>
-    <div class="colhead"><h2>Listings</h2><span class="muted" id="listCount"></span></div>
+    <div class="colhead"><div class="vtabs" role="tablist" aria-label="View"><button type="button" role="tab" data-view="listings" aria-selected="true">Listings</button><button type="button" role="tab" data-view="ledger" aria-selected="false">Holds ledger<small id="ledgerCount"></small></button></div><span class="muted" id="listCount"></span></div>
     <div class="listings" id="listings"><div class="empty">Waiting for the market…</div></div>
+    <div id="ledgerView" hidden>
+      <div class="lfilters">
+        <span class="seg" role="group" aria-label="Status" id="lStatus"><button type="button" data-st="" class="on">All</button><button type="button" data-st="held">Held</button><button type="button" data-st="captured">Captured</button><button type="button" data-st="refunded">Refunded</button></span>
+        <select id="lBuyer" aria-label="Buyer"></select>
+        <select id="lItem" aria-label="Item"></select>
+        <select id="lKind" aria-label="Type"><option value="">All types</option><option value="offer">Offers</option><option value="bid">Bids</option><option value="buy">Purchases</option></select>
+        <span class="sum" id="lSum"></span>
+      </div>
+      <div class="ledgerbox"><div class="tablewrap" id="lTable"></div></div>
+    </div>
   </section>
   <aside>
     <div class="panel you" id="you">
@@ -572,6 +612,75 @@ function renderKpis() {
   if ($("listCount").textContent !== cnt) $("listCount").textContent = cnt;
 }
 
+// ----------------------------------------------------------------- holds ledger
+const LF = { st: "", buyer: "", item: "", kind: "" };
+let view = location.hash === "#ledger" ? "ledger" : "listings";
+const hhmmss = (iso) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toTimeString().slice(0, 8) : "–"; };
+function outcome(h) {
+  if (h.status === "held") return `<span class="muted">waiting for the deal</span>`;
+  if (h.status === "refunded") return `${fmt(h.amount)} back to buyer`;
+  const c = h.captured != null ? h.captured : h.amount;
+  return c < h.amount ? `${fmt(c)} to seller <span class="muted">· ${fmt(h.amount - c)} back</span>` : `${fmt(c)} to seller`;
+}
+function setOptions(sel, first, opts, val) {
+  const html = `<option value="">${esc(first)}</option>` + opts.map(([v, l]) => `<option value="${esc(v)}"${v === val ? " selected" : ""}>${esc(l)}</option>`).join("");
+  setHTML(sel, html);
+}
+function renderLedger() {
+  const items = S.items || [];
+  const rows = [];
+  items.forEach((it) => (it.holds || []).forEach((h, i) => rows.push({ it, h, i: rows.length })));
+  rows.sort((a, b) => (Date.parse(b.h.at) || 0) - (Date.parse(a.h.at) || 0) || b.i - a.i);
+  const open = rows.filter((r) => r.h.status === "held").length;
+  const lc = rows.length ? ` ${rows.length}${open ? ` · ${open} open` : ""}` : "";
+  if ($("ledgerCount").textContent !== lc) $("ledgerCount").textContent = lc;
+  if (view !== "ledger") return;
+  const buyers = [...new Set(rows.map((r) => r.h.buyer))].map((k) => [k, displayName(k)]);
+  setOptions($("lBuyer"), "All buyers", buyers, LF.buyer);
+  setOptions($("lItem"), "All items", items.filter((it) => (it.holds || []).length).map((it) => [it.id, it.name]), LF.item);
+  const shown = rows.filter(({ it, h }) => (!LF.st || h.status === LF.st) && (!LF.buyer || h.buyer === LF.buyer) && (!LF.item || it.id === LF.item) && (!LF.kind || h.kind === LF.kind));
+  const tot = { held: 0, toSeller: 0, back: 0 };
+  for (const { h } of shown) {
+    const c = h.captured != null ? h.captured : h.amount;
+    if (h.status === "held") tot.held += h.amount;
+    else if (h.status === "captured") { tot.toSeller += c; tot.back += h.amount - c; }
+    else tot.back += h.amount;
+  }
+  setHTML($("lSum"), `${shown.length} of ${rows.length} holds`);
+  const kindLabel = { offer: "Offer", bid: "Bid", buy: "Purchase" };
+  setHTML($("lTable"), !rows.length ? `<div class="empty">No holds yet. Every offer, bid and purchase shows up here as an escrow hold.</div>`
+    : !shown.length ? `<div class="empty">No holds match these filters.</div>`
+    : `<table class="ltable"><thead><tr><th>Placed</th><th>Item</th><th>Buyer</th><th>Type</th><th class="num">Held</th><th>Outcome</th><th>Status</th><th>On-chain</th></tr></thead><tbody>${shown.map(({ it, h }) => {
+      const b = buyerByKey(h.buyer);
+      return `<tr class="${isMine(h) ? "mine" : ""}"><td class="t" title="${esc(h.settledAt ? `settled ${hhmmss(h.settledAt)}` : "")}">${hhmmss(h.at)}</td>
+        <td><span class="itm">${art(it, "")}<span>${esc(it.name)}</span></span></td>
+        <td>${esc(displayName(h.buyer))}${b ? ` <span class="badge kind">${esc(b.kind)}</span>` : ""}</td>
+        <td class="muted">${esc(kindLabel[h.kind] || h.kind)}</td>
+        <td class="num">${fmt(h.amount)}</td>
+        <td class="out">${outcome(h)}</td>
+        <td>${chip(h.status)}</td>
+        <td class="r">${txLink(h.tx, "hold ↗")}${h.settleTx ? ` · ${txLink(h.settleTx, "settle ↗")}` : ""}</td></tr>`;
+    }).join("")}</tbody><tfoot><tr><td colspan="4">Totals (filtered)</td><td class="num">${fmt(shown.reduce((s, r) => s + r.h.amount, 0))}</td><td class="out" colspan="3">${fmt(tot.toSeller)} to seller · ${fmt(tot.back)} back to buyers · ${fmt(tot.held)} still held</td></tr></tfoot></table>`);
+}
+function setView(v) {
+  view = v;
+  for (const b of document.querySelectorAll(".vtabs [data-view]")) b.setAttribute("aria-selected", String(b.dataset.view === v));
+  $("listings").hidden = v !== "listings";
+  $("ledgerView").hidden = v !== "ledger";
+  const h = v === "ledger" ? "#ledger" : "";
+  if (location.hash !== h) history.replaceState(null, "", h || location.pathname + location.search);
+  if (S) renderLedger();
+}
+document.querySelector(".vtabs").addEventListener("click", (e) => { const b = e.target.closest("[data-view]"); if (b) setView(b.dataset.view); });
+$("lStatus").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-st]"); if (!b) return;
+  LF.st = b.dataset.st;
+  for (const x of $("lStatus").children) x.classList.toggle("on", x === b);
+  renderLedger();
+});
+for (const [id, k] of [["lBuyer", "buyer"], ["lItem", "item"], ["lKind", "kind"]]) $(id).addEventListener("change", (e) => { LF[k] = e.target.value; renderLedger(); });
+window.addEventListener("hashchange", () => setView(location.hash === "#ledger" ? "ledger" : "listings"));
+
 function renderWallets() {
   const bs = (S.buyers || []).slice();
   if (S.seller && S.seller.balance != null) bs.unshift({ id: "__seller", name: S.seller.name || "Seller agent", kind: "seller", balance: S.seller.balance });
@@ -681,7 +790,7 @@ function render() {
     const first = items.find((i) => i.status === "listed") || items[0];
     if (first) select(first.id, false);
   }
-  renderMeta(); renderScenario(); renderKpis(); renderItems(); renderWallets(); renderLog(); renderRails(); renderYou(); tick();
+  renderMeta(); renderScenario(); renderKpis(); renderItems(); renderLedger(); renderWallets(); renderLog(); renderRails(); renderYou(); tick();
 }
 
 function tick() {
@@ -835,6 +944,7 @@ function connect() {
   es.onopen = () => { const d = document.querySelector("#meta .dot"); if (d) d.classList.add("on"); };
   es.onerror = () => { const d = document.querySelector("#meta .dot"); if (d) d.classList.remove("on"); };
 }
+setView(view);
 connect();
 bootBuyer();
 // fallback if the SSE snapshot is slow to arrive

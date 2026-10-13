@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monkey Studio Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- The whole Holdback integration is this script plus one <div data-holdback-item> below. -->
+<script src="../holdback.js" defer></script>
+<style>
+  /* A merchant's store in the style of Shopify's default theme. Light only, like most stores. */
+  :root {
+    --ink: rgb(18, 18, 18); --ink-75: rgba(18, 18, 18, .75); --ink-55: rgba(18, 18, 18, .55); --line: rgba(18, 18, 18, .08); --line-2: rgba(18, 18, 18, .2);
+    --bg: #ffffff; --soft: #f3f3f3; --band: #c7b5ff; --sale: #c21f1f;
+    --holdback-accent: rgb(18, 18, 18); --holdback-radius: 0px;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  html, body { overflow-x: hidden; }
+  body { margin: 0; background: var(--bg); color: var(--ink-75); font: 16px/1.6 Assistant, ui-sans-serif, system-ui, sans-serif; letter-spacing: .06rem; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  button { font: inherit; letter-spacing: inherit; color: inherit; }
+  .page { max-width: 1200px; margin: 0 auto; padding: 0 50px; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+  /* demo bar (not part of the store) */
+  .demo { background: var(--band); color: #000; font: 13px/1.4 Inter, system-ui, sans-serif; letter-spacing: 0; }
+  .demo .page { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 8px; padding-bottom: 8px; }
+  .demo b { font-weight: 600; }
+  .demo .sp { flex: 1; min-width: 12px; }
+  .demo button, .demo a.btn { border: 1px solid #000; background: transparent; border-radius: 999px; padding: 3px 12px; cursor: pointer; font-weight: 500; text-decoration: none; white-space: nowrap; font-size: 13px; }
+  .demo .ctrls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .demo button[aria-pressed="true"] { background: #000; color: #fff; }
+
+  .announce { border-bottom: 1px solid var(--line); text-align: center; font-size: 13px; padding: 10px 16px; color: var(--ink-75); }
+  header.site { border-bottom: 1px solid var(--line); }
+  header.site .page { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 24px; min-height: 84px; }
+  .logo { font-size: 24px; font-weight: 700; color: var(--ink); letter-spacing: .02em; text-decoration: none; }
+  nav.menu { display: flex; gap: 24px; font-size: 15px; }
+  nav.menu a { text-decoration: none; color: var(--ink-75); }
+  nav.menu a:hover, nav.menu a[aria-current] { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+  .icons { display: flex; gap: 18px; align-items: center; color: var(--ink); }
+  .icons svg { width: 22px; height: 22px; display: block; }
+  .cart { position: relative; }
+  .cart .count { position: absolute; right: -8px; bottom: -6px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--ink); color: #fff; font-size: 11px; display: none; place-items: center; padding: 0 4px; letter-spacing: 0; }
+  .cart .count.on { display: grid; }
+
+  /* product */
+  .product { display: grid; grid-template-columns: minmax(0, 55%) minmax(0, 1fr); gap: 56px; padding-top: 36px; padding-bottom: 56px; }
+  .media { display: grid; gap: 10px; align-content: start; }
+  .media .main { background: var(--soft); aspect-ratio: 1; display: grid; place-items: center; }
+  .media .main svg, .media .main img { width: 100%; height: 100%; display: block; }
+  .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .thumbs button { padding: 0; border: 1px solid transparent; background: var(--soft); aspect-ratio: 1; cursor: pointer; }
+  .thumbs button[aria-current="true"] { border-color: var(--ink); }
+  .thumbs svg { width: 100%; height: 100%; display: block; }
+  .info { min-width: 0; display: grid; align-content: start; gap: 0; }
+  .vendor { font-size: 12px; letter-spacing: .13rem; text-transform: uppercase; color: var(--ink-75); }
+  .info h1 { margin: 6px 0 14px; font-size: 40px; line-height: 1.15; font-weight: 400; color: var(--ink); letter-spacing: .06rem; overflow-wrap: anywhere; }
+  .price { font-size: 18px; color: var(--ink); letter-spacing: .1rem; }
+  .tax { font-size: 13px; color: var(--ink-75); margin: 4px 0 20px; }
+  .tax a { text-underline-offset: 3px; }
+  .qty-label { font-size: 13px; color: var(--ink-75); margin-bottom: 6px; }
+  .qty { display: inline-grid; grid-template-columns: 44px 52px 44px; border: 1px solid var(--line-2); height: 46px; margin-bottom: 18px; width: max-content; }
+  .qty button { border: 0; background: none; cursor: pointer; font-size: 18px; }
+  .qty span { display: grid; place-items: center; color: var(--ink); }
+  .buy { display: grid; gap: 10px; max-width: 440px; }
+  .buy button { height: 46px; cursor: pointer; font-size: 15px; letter-spacing: .1rem; }
+  .atc { background: transparent; border: 1px solid var(--ink); color: var(--ink); }
+  .bin { background: var(--ink); border: 1px solid var(--ink); color: #fff; }
+  .buy button:hover { box-shadow: 0 0 0 1px var(--ink); }
+  .storenote { font-size: 13px; color: var(--ink-75); min-height: 0; }
+  .storenote:empty { display: none; }
+
+  /* the app block slot: where the merchant placed "Holdback offers & bids" in the theme editor */
+  .appblock { max-width: 440px; margin: 22px 0 6px; position: relative; letter-spacing: 0; }
+  .appblock::before { content: "Holdback app block · 2 lines of code"; position: absolute; top: -26px; left: -1px; font: 600 11px/1 Inter, system-ui, sans-serif; letter-spacing: .02em;
+    background: var(--band); color: #000; padding: 6px 8px; display: none; }
+  .show-plugin .appblock { outline: 2px dashed #6c4cf0; outline-offset: 6px; margin-top: 48px; }
+  .show-plugin .appblock::before { display: block; top: -34px; left: -8px; }
+
+  .desc { margin-top: 22px; color: var(--ink-75); max-width: 60ch; }
+  .desc p { margin: 0 0 12px; }
+  details { border-top: 1px solid var(--line); max-width: 440px; }
+  details:last-of-type { border-bottom: 1px solid var(--line); }
+  summary { cursor: pointer; padding: 14px 0; list-style: none; display: flex; justify-content: space-between; color: var(--ink); }
+  summary::after { content: "+"; font-size: 18px; line-height: 1; }
+  details[open] summary::after { content: "–"; }
+  details p { margin: 0 0 14px; font-size: 15px; }
+
+  .related { border-top: 1px solid var(--line); padding-top: 40px; padding-bottom: 60px; }
+  .related h2 { font-size: 24px; font-weight: 400; color: var(--ink); margin: 0 0 24px; letter-spacing: .06rem; }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 10px; }
+  .grid a { text-decoration: none; display: grid; gap: 6px; }
+  .grid .img { background: var(--soft); aspect-ratio: 1; }
+  .grid .img svg { width: 100%; height: 100%; display: block; }
+  .grid .t { color: var(--ink); text-decoration: underline transparent; text-underline-offset: 3px; }
+  .grid a:hover .t { text-decoration-color: currentColor; }
+  .grid .p { font-size: 14px; }
+  .grid .tag { font-size: 12px; justify-self: start; padding: 1px 10px; border-radius: 40px; background: var(--ink); color: #fff; letter-spacing: .04rem; }
+  .grid .tag.sold { background: var(--soft); color: var(--ink); border: 1px solid var(--line-2); }
+
+  footer.site { background: var(--soft); padding: 40px 0; font-size: 14px; }
+  footer.site .page { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+
+  /* toast: the store reacting to Holdback events */
+  .toast { position: fixed; right: 20px; top: 20px; z-index: 2147482000; background: #fff; border: 1px solid var(--line-2); box-shadow: 0 10px 30px rgba(0,0,0,.12);
+    padding: 16px 18px; width: min(360px, calc(100vw - 32px)); display: none; gap: 4px; color: var(--ink); }
+  .toast.on { display: grid; }
+  .toast .k { font-size: 12px; text-transform: uppercase; letter-spacing: .12rem; color: var(--ink-75); display: flex; justify-content: space-between; }
+  .toast .k button { border: 0; background: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; }
+  .toast .m { font-size: 16px; }
+  .toast code { font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--ink-55); letter-spacing: 0; }
+
+  /* install dialog (demo only) */
+  dialog { border: 0; padding: 0; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); font: 14px/1.55 Inter, system-ui, sans-serif; letter-spacing: 0; color: #111; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg { display: grid; grid-template-rows: auto 1fr; max-height: calc(100vh - 48px); }
+  .dlg header { background: var(--band); padding: 18px 22px; display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+  .dlg header h2 { margin: 0; font-size: 20px; font-weight: 600; }
+  .dlg header p { margin: 4px 0 0; color: rgba(0,0,0,.7); }
+  .dlg header button { border: 1px solid #000; background: transparent; border-radius: 999px; width: 32px; height: 32px; cursor: pointer; flex: none; }
+  .dlg .body { overflow: auto; padding: 18px 22px 24px; display: grid; gap: 18px; }
+  .steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  .dlg h3 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+  .dlg h3 span { font-weight: 400; color: #666; font-family: ui-monospace, Menlo, monospace; font-size: 12px; margin-left: 6px; }
+  pre { margin: 0; padding: 12px 14px; background: #f6f6f4; border: 1px solid rgba(0,0,0,.1); overflow: auto; font: 12px/1.55 ui-monospace, Menlo, monospace; white-space: pre; }
+
+  @media (max-width: 990px) {
+    .page { padding: 0 24px; }
+    .product { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+    nav.menu { display: none; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .page { padding: 0 16px; }
+    .info h1 { font-size: 30px; }
+    header.site .page { min-height: 64px; }
+    .demo .sp { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="demo" role="region" aria-label="Demo controls">
+  <div class="page">
+    <span><b>Holdback demo.</b> A fictional store in Shopify's default style, with the Holdback app block installed.</span>
+    <span class="sp"></span>
+    <span class="ctrls"><button type="button" id="showPlugin" aria-pressed="false">Show the plugin</button><button type="button" id="howBtn">How it's installed</button><a class="btn" href="../#ledger" target="_blank" rel="noopener">Seller's ledger ↗</a></span>
+  </div>
+</div>
+
+<div class="announce">Free worldwide delivery on every 1/1 piece · Make an offer on selected works</div>
+<header class="site">
+  <div class="page">
+    <a class="logo" href="./">Monkey Studio</a>
+    <nav class="menu" aria-label="Main"><a href="./">Home</a><a href="./" aria-current="page">Catalog</a><a href="./">About</a><a href="./">Contact</a></nav>
+    <div class="icons">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-label="Search"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-label="Account"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+      <span class="cart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-label="Orders"><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span class="count" id="orders"></span></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="page product" id="product">
+    <div class="media"><div class="main" id="mainArt"></div><div class="thumbs" id="thumbs"></div></div>
+    <div class="info">
+      <div class="vendor">Monkey Studio</div>
+      <h1 id="pTitle">Loading…</h1>
+      <div class="price" id="pPrice"></div>
+      <div class="tax">Tax included. <a href="./">Shipping</a> calculated at checkout.</div>
+      <div class="qty-label">Quantity</div>
+      <div class="qty"><button type="button" aria-label="Decrease quantity" disabled>−</button><span>1</span><button type="button" aria-label="Increase quantity" disabled>+</button></div>
+      <div class="buy">
+        <button type="button" class="atc" data-card>Add to cart</button>
+        <button type="button" class="bin" data-card>Buy it now</button>
+        <div class="storenote" id="storenote" role="status"></div>
+      </div>
+
+      <!-- ===== Holdback app block (what the theme editor inserts) ===== -->
+      <div class="appblock"><div id="hb" data-holdback-item=""></div></div>
+      <!-- ============================================================== -->
+
+      <div class="desc" id="pDesc"></div>
+      <details><summary id="d1h">Edition</summary><p id="d1"></p></details>
+      <details><summary>Shipping &amp; returns</summary><p id="d2"></p></details>
+    </div>
+  </section>
+
+  <section class="page related" aria-labelledby="relH">
+    <h2 id="relH">You may also like</h2>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+<footer class="site"><div class="page"><span>© 2026 Monkey Studio</span><span>Payments: card, or USDC with Holdback escrow</span></div></footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><div class="k"><span id="toastK"></span><button type="button" aria-label="Dismiss" id="toastX">×</button></div><div class="m" id="toastM"></div><code id="toastC"></code></div>
+
+<dialog id="how" aria-labelledby="howH">
+  <div class="dlg">
+    <header><div><h2 id="howH">How the store got Holdback</h2><p>No checkout changes. The merchant adds one app block, and Holdback handles offers, bids and guarantees as escrow holds.</p></div><button type="button" aria-label="Close" id="howX">×</button></header>
+    <div class="body">
+      <ol class="steps">
+        <li>Install the Holdback app. It ships a Shopify <b>theme app extension</b>.</li>
+        <li>Theme editor → Product template → <b>Add block</b> → Apps → <b>Holdback offers &amp; bids</b>. Drop it under Buy it now.</li>
+        <li>Paste the market URL. Each product maps to a Holdback item by handle, a <code>holdback.item_id</code> metafield, or the block setting.</li>
+        <li>Optional: listen for <code>holdback:purchase</code> to mark the order paid. This page does that for the toast and the bag badge.</li>
+      </ol>
+      <div><h3>Any website <span>2 lines</span></h3><pre id="codeHtml"></pre></div>
+      <div><h3>The app block <span>extensions/holdback/blocks/holdback.liquid</span></h3><pre id="codeLiquid">Loading…</pre></div>
+      <div><h3>Extension config <span>extensions/holdback/shopify.extension.toml</span></h3><pre id="codeToml">Loading…</pre></div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+// Store-side code. Product pages come from the market snapshot here so the demo stays in sync;
+// a real store has its own catalog and only passes the item id to the block.
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (n) => `$${Number(n || 0).toFixed(2)} USD`;
+let items = [], current = new URLSearchParams(location.search).get("item");
+
+function monkey(hue, pose = 0) {
+  hue = Number(hue) || 0;
+  const f = `hsl(${hue} 45% 42%)`, face = `hsl(${hue} 55% 78%)`, bg = `hsl(${(hue + 160 + pose * 25) % 360} 60% ${88 - pose * 3}%)`;
+  const tilt = [0, -8, 8, 0][pose % 4], s = [1, 1.08, 1.08, .8][pose % 4];
+  return `<svg viewBox="0 0 120 120" role="img" aria-label="artwork"><rect width="120" height="120" fill="${bg}"/>
+    <g transform="rotate(${tilt} 60 60) translate(60 60) scale(${s}) translate(-60 -60)">
+    <circle cx="28" cy="58" r="15" fill="${f}"/><circle cx="92" cy="58" r="15" fill="${f}"/>
+    <circle cx="28" cy="58" r="8" fill="${face}"/><circle cx="92" cy="58" r="8" fill="${face}"/>
+    <circle cx="60" cy="60" r="36" fill="${f}"/><ellipse cx="60" cy="70" rx="24" ry="20" fill="${face}"/>
+    <ellipse cx="48" cy="52" rx="9" ry="10" fill="${face}"/><ellipse cx="72" cy="52" rx="9" ry="10" fill="${face}"/>
+    <circle cx="49" cy="54" r="4" fill="#1d1b16"/><circle cx="71" cy="54" r="4" fill="#1d1b16"/>
+    <ellipse cx="60" cy="68" rx="5" ry="3" fill="#1d1b16" opacity=".7"/>
+    <path d="M50 78 Q60 86 70 78" stroke="#1d1b16" stroke-width="3" fill="none" stroke-linecap="round"/></g></svg>`;
+}
+const art = (it, pose) => it.image ? `<img src="${esc(it.image)}" alt="${esc(it.name)}">` : monkey(it.hue, pose);
+const DESC = {
+  nft: "A one-of-one hand-drawn monkey from the studio's first series. Ownership is a Solana token; the file is yours to print and display.",
+  digital: "Print-ready, 8000 × 8000 px. Delivered the moment you buy, with a money-back guarantee you control.",
+  physical: "Made by hand in our studio, one at a time. Ships in 3–5 days, tracked.",
+};
+const DETAILS = {
+  nft: ["Edition", "1 of 1. The token sits in an on-chain escrow account until it is sold, and moves to the buyer in the same transaction as the payment.",
+    "Delivered on-chain the moment the deal clears."],
+  digital: ["File", "PNG, 8000 × 8000 px, sRGB. Personal and print use.",
+    "Delivered at once. You can reclaim your payment yourself inside the guarantee window, without asking us."],
+  physical: ["Materials", "Handmade, so each one is slightly different. Care instructions come in the box.",
+    "Your payment waits in escrow while it ships. If it doesn't arrive or isn't as described, you reclaim it yourself inside the window; otherwise it releases to us."],
+};
+
+let pose = 0;
+function renderProduct() {
+  const it = items.find((i) => i.id === current);
+  if (!it) return;
+  if ($("pTitle").textContent !== it.name) { $("pTitle").textContent = it.name; document.title = `${it.name} – Monkey Studio`; pose = 0; }
+  $("pPrice").innerHTML = it.status === "sold" ? `<s>${money(it.ask)}</s> &nbsp;Sold` : money(it.ask);
+  const main = art(it, pose);
+  if ($("mainArt").dataset.k !== `${it.id}:${pose}`) { $("mainArt").innerHTML = main; $("mainArt").dataset.k = `${it.id}:${pose}`; }
+  const th = it.image ? "" : [0, 1, 2, 3].map((p) => `<button type="button" data-pose="${p}" aria-label="View ${p + 1}" aria-current="${p === pose}">${monkey(it.hue, p)}</button>`).join("");
+  if ($("thumbs").dataset.k !== `${it.id}:${pose}`) { $("thumbs").innerHTML = th; $("thumbs").dataset.k = `${it.id}:${pose}`; }
+  const d = `<p>${esc(it.description || DESC[it.kind] || DESC.nft)}</p>`;
+  if ($("pDesc").innerHTML !== d) $("pDesc").innerHTML = d;
+  const [h1, t1, t2] = DETAILS[it.kind] || DETAILS.nft;
+  $("d1h").textContent = h1; $("d1").textContent = t1; $("d2").textContent = t2;
+  // tell the app block which item this product is
+  const hb = $("hb");
+  if (hb.dataset.holdbackItem !== it.id) { hb.dataset.holdbackItem = it.id; window.Holdback && Holdback.mount(hb, it.id); }
+}
+
+function renderGrid() {
+  const others = items.filter((i) => i.id !== current);
+  const tag = (i) => i.status === "sold" ? `<span class="tag sold">Sold</span>`
+    : i.mechanism === "auction" ? `<span class="tag">Live auction</span>` : i.mechanism === "dutch" ? `<span class="tag">Price dropping</span>`
+    : i.mechanism === "offers" ? `<span class="tag">Make an offer</span>` : i.kind === "physical" ? `<span class="tag">Held until delivered</span>` : i.guarantee ? `<span class="tag">${esc(i.guarantee)} guarantee</span>` : "";
+  const html = others.length ? others.map((i) => `<a href="?item=${encodeURIComponent(i.id)}" data-item="${esc(i.id)}"><div class="img">${art(i)}</div>${tag(i)}<span class="t">${esc(i.name)}</span><span class="p">${money(i.ask)}</span></a>`).join("")
+    : `<p>More pieces are on the way.</p>`;
+  if ($("grid").dataset.k !== html) { $("grid").innerHTML = html; $("grid").dataset.k = html; }
+}
+
+function onSnapshot(S) {
+  items = (S && S.items) || [];
+  if (!items.length) { $("pTitle").textContent = "Nothing listed yet"; $("pPrice").textContent = "The seller agent hasn't listed anything. Start the scenario from the gallery."; return; }
+  if (!current || !items.some((i) => i.id === current)) current = (items.find((i) => i.status === "listed" && i.mechanism === "offers") || items.find((i) => i.status === "listed") || items[0]).id;
+  renderProduct(); renderGrid();
+}
+
+function go(id) {
+  current = id;
+  history.pushState(null, "", `?item=${encodeURIComponent(id)}`);
+  renderProduct(); renderGrid();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$("grid").addEventListener("click", (e) => { const a = e.target.closest("a[data-item]"); if (!a || e.metaKey || e.ctrlKey) return; e.preventDefault(); go(a.dataset.item); });
+window.addEventListener("popstate", () => { current = new URLSearchParams(location.search).get("item"); renderProduct(); renderGrid(); });
+$("thumbs").addEventListener("click", (e) => { const b = e.target.closest("[data-pose]"); if (b) { pose = Number(b.dataset.pose); renderProduct(); } });
+for (const b of document.querySelectorAll("[data-card]")) b.onclick = () => { $("storenote").textContent = "Card checkout is switched off in this demo store. Use the Holdback block below."; };
+
+// ---- the store reacting to Holdback events (optional integration)
+let orders = 0, toastT;
+function toast(kicker, msg, code) {
+  $("toastK").textContent = kicker; $("toastM").textContent = msg; $("toastC").textContent = code;
+  $("toast").classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => $("toast").classList.remove("on"), 7000);
+}
+$("toastX").onclick = () => $("toast").classList.remove("on");
+document.addEventListener("holdback:hold", (e) => {
+  const { item, hold } = e.detail;
+  toast("Holdback", `${hold.kind === "bid" ? "Bid" : "Offer"} of $${hold.amount} on ${item.name} is held in escrow.`, "event: holdback:hold");
+});
+document.addEventListener("holdback:purchase", (e) => {
+  const { item, hold } = e.detail;
+  orders++; $("orders").textContent = orders; $("orders").classList.add("on");
+  toast(`Order #${1040 + orders} placed`, `${item.name}, paid $${hold.captured ?? hold.amount} with Holdback.`, "event: holdback:purchase");
+});
+document.addEventListener("holdback:refund", (e) => {
+  const { item, hold } = e.detail;
+  toast("Holdback", `$${hold.amount} for ${item.name} is back in your wallet.`, "event: holdback:refund");
+});
+
+// ---- demo controls
+$("showPlugin").onclick = () => {
+  const on = document.body.classList.toggle("show-plugin");
+  $("showPlugin").setAttribute("aria-pressed", String(on));
+  if (on) document.querySelector(".appblock").scrollIntoView({ behavior: "smooth", block: "center" });
+};
+$("codeHtml").textContent = `<script src="${location.origin}/holdback.js" defer><\/script>\n<div data-holdback-item="${current || "monkey-3"}"></div>`;
+let loaded = false;
+$("howBtn").onclick = async () => {
+  $("how").showModal();
+  $("codeHtml").textContent = `<script src="${Holdback.market}/holdback.js" defer><\/script>\n<div data-holdback-item="${current || "monkey-3"}"></div>`;
+  if (loaded) return; loaded = true;
+  for (const [id, f] of [["codeLiquid", "extension/blocks/holdback.liquid"], ["codeToml", "extension/shopify.extension.toml"]]) {
+    try { const r = await fetch(f); $(id).textContent = r.ok ? await r.text() : `(${f} not found)`; } catch { $(id).textContent = `(couldn't load ${f})`; }
+  }
+};
+$("howX").onclick = () => $("how").close();
+$("how").addEventListener("click", (e) => { if (e.target === $("how")) $("how").close(); });
+
+addEventListener("DOMContentLoaded", () => {
+  if (!window.Holdback) { $("pTitle").textContent = "Holdback didn't load"; return; }
+  Holdback.onChange(onSnapshot);
+});
+</script>
+</body>
+</html>

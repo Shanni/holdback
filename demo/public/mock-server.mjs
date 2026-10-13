@@ -60,12 +60,12 @@ const item = (id) => state.items.find((i) => i.id === id);
 const buyer = (id) => state.buyers.find((b) => b.id === id || b.name === id);
 
 function hold(it, b, kind, amount) {
-  const h = { id: `h${++hid}`, itemId: it.id, buyer: b.name, kind, amount, status: "held", tx: sig() };
+  const h = { id: `h${++hid}`, itemId: it.id, buyer: b.name, kind, amount, status: "held", tx: sig(), at: now() };
   b.balance -= amount; it.holds.push(h); return h;
 }
-function refund(h) { if (h.status !== "held") return; h.status = "refunded"; h.settleTx = sig(); buyer(h.buyer).balance += h.amount; }
+function refund(h) { if (h.status !== "held") return; h.status = "refunded"; h.settleTx = sig(); h.settledAt = now(); buyer(h.buyer).balance += h.amount; }
 function capture(h, amt = h.amount) {
-  h.status = "captured"; h.settleTx = sig();
+  h.status = "captured"; h.settleTx = sig(); h.settledAt = now();
   if (amt < h.amount) { h.captured = amt; buyer(h.buyer).balance += h.amount - amt; }
 }
 function sell(it, b, price, h) {
@@ -175,20 +175,24 @@ Object.assign(state.scenario, { mode: STEP ? "step" : "auto", total: scenes.leng
 log("Seller", "listed 4 monkeys and a print, and picked a mechanism for each");
 
 // ---------------------------------------------------------------- http
-const send = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(obj)); };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".liquid": "text/plain; charset=utf-8", ".toml": "text/plain; charset=utf-8" };
+const send = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*" }); res.end(JSON.stringify(obj)); };
 const body = (req) => new Promise((r) => { let d = ""; req.on("data", (c) => (d += c)); req.on("end", () => { try { r(JSON.parse(d || "{}")); } catch { r({}); } }); });
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   const p = u.pathname;
   try {
-    if (req.method === "GET" && (p === "/" || p === "/index.html")) { res.writeHead(200, { "content-type": "text/html" }); return res.end(fs.readFileSync(path.join(DIR, "index.html"))); }
-    if (req.method === "GET" && p.startsWith("/public/")) {
-      const f = path.join(DIR, path.normalize(p.slice(8)).replace(/^(\.\.[/\\])+/, ""));
-      if (!f.startsWith(DIR) || !fs.existsSync(f)) return send(res, 404, { error: "not found" });
+    if (req.method === "OPTIONS") { res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type" }); return res.end(); }
+    if (req.method === "GET" && !p.startsWith("/api/") && p !== "/events") {
+      let rel = decodeURIComponent(p.startsWith("/public/") ? p.slice(8) : p.slice(1));
+      if (rel === "" || rel.endsWith("/")) rel += "index.html";
+      const f = path.normalize(path.join(DIR, rel));
+      if (!f.startsWith(DIR) || !fs.existsSync(f) || !fs.statSync(f).isFile()) return send(res, 404, { error: "not found" });
+      res.writeHead(200, { "content-type": TYPES[path.extname(f)] ?? "application/octet-stream", "cache-control": "no-cache" });
       return res.end(fs.readFileSync(f));
     }
     if (p === "/events") {
-      res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+      res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive", "access-control-allow-origin": "*" });
       res.write(`data: ${JSON.stringify(state)}\n\n`); clients.add(res); req.on("close", () => clients.delete(res)); return;
     }
     if (req.method === "GET" && p === "/api/items") return send(res, 200, state.items);

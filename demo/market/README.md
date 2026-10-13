@@ -48,6 +48,9 @@ Tests: `node --test demo/market/negotiation.test.mts demo/mechanism.test.mts`
 9. A hi-res print (digital, 5 dUSDC, 7-day money-back guarantee): Cy buys.
 10. Cy reclaims the 5 dUSDC inside the guarantee window, no seller approval.
 
+Pages: `/` Gallery (Listings + Holds ledger, `/#ledger`), `/store/` a Shopify-style store with the
+Holdback widget embedded (`demo/public/holdback.js`). The store's shoppers appear in the Gallery next to the agents.
+
 A human or MCP buyer can join at any time: `POST /api/buyers`, then offer / respond / bid / buy.
 
 ## Extensions beyond API.md (backward compatible)
@@ -60,5 +63,7 @@ A human or MCP buyer can join at any time: `POST /api/buyers`, then offer / resp
   `readMessage`, no LLM, nothing on-chain), answers it in its reply, and nudges its concession within the floor
   (hardship faster, enthusiasm firmer, rude none). Seller turns carry `read: Intent[]`. See "Buyer messages" in `demo/API.md`.
   The Gallery's You panel has a message box with three quick chips; messages show as chat bubbles.
-- `Hold.tx` / `settleTx` and log `tx` are explorer URLs.
+- `Hold.tx` / `settleTx` and log `tx` are explorer URLs. `Hold.at` / `settledAt` are ISO times (the Gallery's Holds ledger sorts by them).
+- Static files: everything in `demo/public/` is served at `/`, directories at their `index.html`
+  (`/holdback.js` is the embeddable widget, `/store/` the Shopify-style demo store).
 - Seller accepts an offer within 3% of ask of its standing counter ("close enough").

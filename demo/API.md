@@ -10,7 +10,8 @@ captured when the deal clears, refunded otherwise. Errors: HTTP 4xx `{ "error": 
 type Mechanism = "buy-now" | "offers" | "auction" | "dutch";
 type HoldStatus = "held" | "captured" | "refunded";
 type Hold = { id: string; itemId: string; buyer: string; kind: "offer" | "bid" | "buy";
-              amount: number; captured?: number; status: HoldStatus; tx: string; settleTx?: string };
+              amount: number; captured?: number; status: HoldStatus; tx: string; settleTx?: string;
+              at: string; settledAt?: string };   // ISO times the hold was placed and settled
 type Turn = { from: "buyer" | "seller"; buyer: string; amount: number;
               action: "offer" | "counter" | "accept" | "decline" | "walk_away"; message: string; at: string;
               read?: Intent[] };                 // seller turns: what the seller agent picked up from the buyer's message

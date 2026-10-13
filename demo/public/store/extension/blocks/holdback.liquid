@@ -1,0 +1,34 @@
+{%- comment -%}
+  Holdback app block. Renders one mount point; assets/holdback.js (loaded through "javascript" below)
+  turns it into the offer / bid / guaranteed-buy panel. Every offer, bid and purchase is an escrow hold.
+{%- endcomment -%}
+{%- liquid
+  assign item_id = block.settings.item_id
+  if item_id == blank
+    assign item_id = product.metafields.holdback.item_id.value | default: product.handle
+  endif
+-%}
+<div
+  data-holdback-item="{{ item_id | escape }}"
+  data-holdback-market="{{ block.settings.market_url | escape }}"
+  data-theme="{{ block.settings.theme }}"
+  style="--holdback-accent: {{ block.settings.accent }}; --holdback-radius: {{ block.settings.radius }}px; margin: 1.5rem 0;"
+  {{ block.shopify_attributes }}
+></div>
+
+{% schema %}
+{
+  "name": "Holdback offers & bids",
+  "target": "section",
+  "javascript": "holdback.js",
+  "enabled_on": { "templates": ["product"] },
+  "settings": [
+    { "type": "text", "id": "market_url", "label": "Holdback market URL", "default": "https://market.example.com" },
+    { "type": "text", "id": "item_id", "label": "Holdback item ID", "info": "Leave empty to use the product's holdback.item_id metafield, then its handle." },
+    { "type": "select", "id": "theme", "label": "Color scheme", "default": "light",
+      "options": [ { "value": "light", "label": "Light" }, { "value": "dark", "label": "Dark" }, { "value": "auto", "label": "Follow the shopper's device" } ] },
+    { "type": "color", "id": "accent", "label": "Button color", "default": "#121212" },
+    { "type": "range", "id": "radius", "label": "Corner radius", "min": 0, "max": 24, "step": 2, "unit": "px", "default": 8 }
+  ]
+}
+{% endschema %}

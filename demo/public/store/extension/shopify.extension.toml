@@ -1,0 +1,4 @@
+# Shopify theme app extension: merchants add "Holdback offers & bids" to a product page in the theme editor.
+# Deploy with the Shopify CLI from an app that contains this folder under extensions/holdback/.
+name = "holdback"
+type = "theme"

@@ -4,7 +4,9 @@
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "build": "anchor build --no-idl && RUSTUP_TOOLCHAIN=nightly anchor idl build -o target/idl/holdback.json -t target/types/holdback.ts",
-    "test": "anchor test --skip-build"
+    "test": "anchor test --skip-build",
+    "shopify:assets": "cp demo/public/holdback.js demo/public/store/extension/assets/holdback.js",
+    "demo:mock": "node demo/public/mock-server.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",

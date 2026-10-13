@@ -22,7 +22,6 @@ const AUCTION_SECS = Number(process.env.AUCTION_SECS ?? 45);
 const DUTCH_STEP_SECS = Number(process.env.DUTCH_STEP_SECS ?? 6);
 const STALE_SECS = Number(process.env.STALE_SECS ?? 20);
 const BUYER_USD = Number(process.env.BUYER_USD ?? 300);
-const GUARANTEE_SECS = 7 * 86400;
 const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
 
 // ------------------------------------------------------------------ public types (demo/API.md)
@@ -31,6 +30,7 @@ type HoldStatus = "held" | "captured" | "refunded";
 type Hold = {
   id: string; itemId: string; buyer: string; kind: "offer" | "bid" | "buy";
   amount: number; captured?: number; status: HoldStatus; tx: string; settleTx?: string;
+  at: string; settledAt?: string;   // extensions: ISO times the hold was placed and settled
 };
 type Turn = {
   from: "buyer" | "seller"; buyer: string; amount: number;
@@ -50,8 +50,9 @@ type Item = {
   negotiations: Record<string, Turn[]>;
   holds: Hold[];
   // extensions
-  kind: "nft" | "digital";
+  kind: "nft" | "digital" | "physical";   // digital / physical: no NFT, fixed price, guarantee hold
   guarantee?: string;
+  description?: string;
   listing?: string;
   nft?: string;
 };
@@ -65,6 +66,7 @@ type Lot = {
   nft?: PublicKey;
   listedAt: number;
   staleSecs: number;
+  guaranteeSecs: number;                                    // digital / physical: how long the buyer can reclaim
   openToOffers: boolean;                                    // no watchers yet: offers instead of buy-now
   offers: Map<string, string>;                              // buyerId -> held offer hold id
   counters: Map<string, number>;                            // buyerId -> seller's standing price for them
@@ -180,11 +182,11 @@ async function newHold(b: BuyerRec, lot: Lot, kind: Hold["kind"], amount: number
   let r;
   try { r = await chain.hold(b.kp, policy, amount); } catch (e) { throw bad(`hold failed: ${chainError(e)}`); }
   b.pub.balance -= amount;
-  const pub: Hold = { id: r.payment.toBase58(), itemId: lot.item.id, buyer: b.pub.name, kind, amount, status: "held", tx: chain.explorer(r.sig) };
+  const pub: Hold = { id: r.payment.toBase58(), itemId: lot.item.id, buyer: b.pub.name, kind, amount, status: "held", tx: chain.explorer(r.sig), at: new Date().toISOString() };
   holdById.set(pub.id, { pub, payment: r.payment, buyerId: b.pub.id, lot, policy: pol });
   lot.item.holds.push(pub);
   const label = { offer: "offer", bid: "max bid", buy: "purchase" }[kind];
-  say(b.pub.name, `${label} ${amount} dUSDC on ${lot.item.name} → held in escrow${pol === "guarantee" ? " (7-day money-back guarantee)" : ""}`, r.sig);
+  say(b.pub.name, `${label} ${amount} dUSDC on ${lot.item.name} → held in escrow${pol === "guarantee" ? ` (${lot.item.guarantee} guarantee)` : ""}`, r.sig);
   return holdById.get(pub.id)!;
 }
 
@@ -194,6 +196,7 @@ async function voidHold(h: HoldRec, why: string) {
   const sig = await chain.refund(h.payment);
   h.pub.status = "refunded";
   h.pub.settleTx = chain.explorer(sig);
+  h.pub.settledAt = new Date().toISOString();
   if (h.lot.offers.get(h.buyerId) === h.pub.id) h.lot.offers.delete(h.buyerId);
   say("Seller agent", `releases ${h.pub.buyer}'s ${h.pub.amount} dUSDC hold (${why})`, sig);
 }
@@ -205,6 +208,7 @@ async function sell(lot: Lot, h: HoldRec, price: number, othersWhy: string) {
   h.pub.status = "captured";
   h.pub.captured = price;
   h.pub.settleTx = chain.explorer(sig);
+  h.pub.settledAt = new Date().toISOString();
   Object.assign(lot.item, { status: "sold", soldTo: b.pub.name, soldFor: price, saleTx: chain.explorer(sig), price: undefined });
   lot.dutch = undefined;
   lot.offers.delete(h.buyerId);
@@ -218,7 +222,7 @@ async function sell(lot: Lot, h: HoldRec, price: number, othersWhy: string) {
 // ------------------------------------------------------------------ seller agent: mechanism
 async function decide(lot: Lot, trigger: string, force = false) {
   const it = lot.item;
-  if (it.status !== "listed" || it.kind === "digital") return;
+  if (it.status !== "listed" || it.kind !== "nft") return;
   if (it.mechanism === "auction" && it.auction && !it.auction.closed) {
     if (force) say("Seller agent", `${it.name}: auction running; goal "${it.goal}" applies after it closes`);
     return;
@@ -364,7 +368,7 @@ async function offer(lot: Lot, body: any) {
   const b = buyerOr400(body?.buyerId);
   const amount = amountOr400(body?.amount);
   listedOr400(lot);
-  if (lot.item.kind === "digital") throw bad(`${lot.item.name} is fixed price (${lot.item.ask}): use buy`);
+  if (lot.item.kind !== "nft") throw bad(`${lot.item.name} is fixed price (${lot.item.ask}): use buy`);
   await watch(lot, b);
   const it = lot.item;
   if (it.mechanism === "auction") throw bad(`${it.name} is in a proxy auction until ${it.auction?.endsAt}: place a bid instead`);
@@ -400,6 +404,7 @@ async function respond(lot: Lot, body: any) {
       const sig = await chain.reclaim(b.kp, prev.payment);
       prev.pub.status = "refunded";
       prev.pub.settleTx = chain.explorer(sig);
+      prev.pub.settledAt = new Date().toISOString();
       lot.offers.delete(b.pub.id);
       say(b.pub.name, `walks away from ${it.name} and takes back the ${prev.pub.amount} dUSDC offer hold`, sig);
     } else say(b.pub.name, `walks away from ${it.name}`);
@@ -444,10 +449,12 @@ async function buy(lot: Lot, body: any) {
   const b = buyerOr400(body?.buyerId);
   listedOr400(lot);
   const it = lot.item;
-  if (it.kind === "digital") {
-    const h = await newHold(b, lot, "buy", it.ask, presets.guarantee(GUARANTEE_SECS), "guarantee");
+  if (it.kind !== "nft") {
+    const h = await newHold(b, lot, "buy", it.ask, presets.guarantee(lot.guaranteeSecs), "guarantee");
     Object.assign(it, { status: "sold", soldTo: b.pub.name, soldFor: it.ask, saleTx: h.pub.tx });
-    say("Seller agent", `delivers ${it.name} to ${b.pub.name}. Payment releases in 7 days unless ${b.pub.name} reclaims it`);
+    say("Seller agent", it.kind === "physical"
+      ? `ships ${it.name} to ${b.pub.name}. Payment stays in escrow for ${it.guarantee} unless ${b.pub.name} reclaims it (lost, damaged, not as described)`
+      : `delivers ${it.name} to ${b.pub.name}. Payment releases in ${it.guarantee} unless ${b.pub.name} reclaims it`);
     return { hold: h.pub, item: it };
   }
   if (it.mechanism === "auction") throw bad(`${it.name} is in a proxy auction: place a bid instead`);
@@ -467,6 +474,7 @@ async function reclaim(h: HoldRec, body: any) {
   }
   h.pub.status = "refunded";
   h.pub.settleTx = chain.explorer(sig);
+  h.pub.settledAt = new Date().toISOString();
   const lot = h.lot, it = lot.item;
   if (lot.offers.get(b.pub.id) === h.pub.id) {
     lot.offers.delete(b.pub.id);
@@ -475,7 +483,7 @@ async function reclaim(h: HoldRec, body: any) {
   if (lot.bids.get(b.pub.id)?.holdId === h.pub.id) { lot.bids.delete(b.pub.id); updateAuction(lot); }
   if (h.policy === "guarantee" && it.soldTo === b.pub.name) {
     Object.assign(it, { status: "listed", soldTo: undefined, soldFor: undefined, saleTx: undefined });
-    say(b.pub.name, `reclaims ${h.pub.amount} dUSDC for ${it.name} inside the 7-day guarantee, no seller approval needed`, sig);
+    say(b.pub.name, `reclaims ${h.pub.amount} dUSDC for ${it.name} inside the ${it.guarantee} guarantee, no seller approval needed`, sig);
   } else say(b.pub.name, `reclaims ${h.pub.amount} dUSDC (${h.pub.kind} on ${it.name})`, sig);
   return { hold: h.pub };
 }
@@ -486,7 +494,8 @@ async function listItem(body: any) {
   if (!name) throw bad("name required");
   const ask = amountOr400(body?.ask, "ask");
   const floor = body?.floor === undefined ? Math.round(ask * 0.6) : amountOr400(body.floor, "floor");
-  const kind: Item["kind"] = body?.kind === "digital" ? "digital" : "nft";
+  const kind: Item["kind"] = body?.kind === "digital" || body?.kind === "physical" ? body.kind : "nft";
+  const days = body?.guaranteeDays === undefined ? (kind === "physical" ? 14 : 7) : amountOr400(body.guaranteeDays, "guaranteeDays");
   const goal: Goal = body?.goal === "quick-sale" ? "quick-sale" : "best-price";
   let id = slug(name);
   while (lotById.has(id)) id += "-x";
@@ -495,12 +504,16 @@ async function listItem(body: any) {
       id, name, hue: Number(body?.hue ?? 30), image: body?.image, mechanism: "" as Mechanism, reason: "", goal, ask,
       status: "listed", watchers: [], negotiations: {}, holds: [], kind,
     },
-    floor, listedAt: Date.now(), staleSecs: body?.staleSecs === undefined ? STALE_SECS : Number(body.staleSecs),
+    floor, guaranteeSecs: days * 86400, listedAt: Date.now(), staleSecs: body?.staleSecs === undefined ? STALE_SECS : Number(body.staleSecs),
     openToOffers: body?.mechanism === "offers",
     offers: new Map(), counters: new Map(), bids: new Map(),
   };
-  if (kind === "digital") {
-    Object.assign(lot.item, { mechanism: "buy-now", price: ask, guarantee: "7 days", reason: "digital download → fixed price with a 7-day money-back guarantee" });
+  if (kind !== "nft") {
+    const guarantee = `${days} days`;
+    const reason = kind === "physical"
+      ? `physical item, ships in a few days → fixed price; payment held in escrow until it arrives, ${guarantee} to reclaim`
+      : `digital download → fixed price with a ${days}-day money-back guarantee`;
+    Object.assign(lot.item, { mechanism: "buy-now", price: ask, guarantee, reason, ...(body?.description ? { description: String(body.description).slice(0, 400) } : {}) });
     lots.push(lot); lotById.set(id, lot);
     say("Seller agent", `lists ${name}: BUY-NOW at ${ask}: ${lot.item.reason}`);
     return lot.item;
@@ -554,7 +567,7 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse) {
   if (!p.startsWith("/api/")) {
     if (m === "GET" && (p === "/" || p === "/index.html")) { if (serveFile(res, "index.html")) return; }
     if (m === "GET" && p.startsWith("/public/") && serveFile(res, decodeURIComponent(p.slice(8)))) return;
-    if (m === "GET" && serveFile(res, decodeURIComponent(p.slice(1)))) return;
+    if (m === "GET" && serveFile(res, decodeURIComponent(p.slice(1)) + (p.endsWith("/") ? "index.html" : ""))) return;
     return res.writeHead(404, { "content-type": "text/plain" }).end("not found");
   }
   const parts = p.split("/").filter(Boolean).slice(1).map(decodeURIComponent); // after "api"

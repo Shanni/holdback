@@ -7,3 +7,5 @@ test-ledger
 .yarn
 .keys
 demo/video/*.mp4
+demo/public/store/extension/assets/holdback.js
+demo/video/pitch/*.mp3
