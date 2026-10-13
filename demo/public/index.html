@@ -4,208 +4,302 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Holdback Gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1b16; --muted: #6b665c; --line: #e4dfd4; --soft: #f1eee6;
-    --held: #b7791f; --held-bg: #fdf3e1; --cap: #2f7d4f; --cap-bg: #e5f4ea; --ref: #5b6b8c; --ref-bg: #e9edf5;
-    --accent: #1d1b16; --on-accent: #f6f4ef; --err: #b42318; --err-bg: #fdecea; --sel: #b7791f;
+    --canvas: #f3f4f6; --surface: #ffffff; --sunken: #f8f9fb; --ink: #101828; --ink-2: #344054; --muted: #667085;
+    --line: #e4e7ec; --line-strong: #d0d5dd; --focus: #3559e0; --ring: rgba(53, 89, 224, .18);
+    --agent: #eef2ff; --agent-line: #d6defc;
+    --held: #b54708; --held-bg: #fffaeb; --held-line: #fedf89;
+    --cap: #067647; --cap-bg: #ecfdf3; --cap-line: #abefc6;
+    --ref: #3e4c7a; --ref-bg: #eef2f8; --ref-line: #c9d3e6;
+    --err: #b42318; --err-bg: #fef3f2; --err-line: #fecdca;
+    --accent: #101828; --on-accent: #ffffff;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #15140f; --panel: #1f1d17; --ink: #f1ede4; --muted: #a39d90; --line: #34312a; --soft: #29271f;
-      --held: #f0b75a; --held-bg: #3a2e18; --cap: #6fd39a; --cap-bg: #183224; --ref: #a9b7d6; --ref-bg: #232a3a;
-      --accent: #f1ede4; --on-accent: #15140f; --err: #ff9b8f; --err-bg: #3a1c18; --sel: #f0b75a; color-scheme: dark; }
+    :root:not([data-theme="light"]) {
+      --canvas: #0b0f17; --surface: #121826; --sunken: #0f1420; --ink: #eaecf0; --ink-2: #cdd2db; --muted: #98a2b3;
+      --line: #232b3a; --line-strong: #2f3949; --focus: #7a93ff; --ring: rgba(122, 147, 255, .25);
+      --agent: #161f38; --agent-line: #27345a;
+      --held: #fdb022; --held-bg: #2a1f0a; --held-line: #5c4210;
+      --cap: #47cd89; --cap-bg: #0a2a1b; --cap-line: #155c3a;
+      --ref: #a4b6e0; --ref-bg: #172034; --ref-line: #2e3e62;
+      --err: #fda29b; --err-bg: #3a1512; --err-line: #6b2a24;
+      --accent: #eaecf0; --on-accent: #0b0f17; color-scheme: dark;
+    }
   }
-  :root[data-theme="dark"] { --bg: #15140f; --panel: #1f1d17; --ink: #f1ede4; --muted: #a39d90; --line: #34312a; --soft: #29271f;
-    --held: #f0b75a; --held-bg: #3a2e18; --cap: #6fd39a; --cap-bg: #183224; --ref: #a9b7d6; --ref-bg: #232a3a;
-    --accent: #f1ede4; --on-accent: #15140f; --err: #ff9b8f; --err-bg: #3a1c18; --sel: #f0b75a; color-scheme: dark; }
+  :root[data-theme="dark"] {
+    --canvas: #0b0f17; --surface: #121826; --sunken: #0f1420; --ink: #eaecf0; --ink-2: #cdd2db; --muted: #98a2b3;
+    --line: #232b3a; --line-strong: #2f3949; --focus: #7a93ff; --ring: rgba(122, 147, 255, .25);
+    --agent: #161f38; --agent-line: #27345a;
+    --held: #fdb022; --held-bg: #2a1f0a; --held-line: #5c4210;
+    --cap: #47cd89; --cap-bg: #0a2a1b; --cap-line: #155c3a;
+    --ref: #a4b6e0; --ref-bg: #172034; --ref-line: #2e3e62;
+    --err: #fda29b; --err-bg: #3a1512; --err-line: #6b2a24;
+    --accent: #eaecf0; --on-accent: #0b0f17; color-scheme: dark;
+  }
   * { box-sizing: border-box; }
   html, body { overflow-x: hidden; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
   a { color: inherit; }
   button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .muted { color: var(--muted); }
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 0 24px; }
 
-  header { padding: 20px 24px 14px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start; justify-content: space-between; }
-  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
-  header p { margin: 4px 0 0; color: var(--muted); max-width: 680px; }
-  .legend { display: flex; gap: 6px 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .hright { display: grid; gap: 8px; justify-items: end; min-width: 0; }
-  .meta { color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, monospace; text-align: right; overflow-wrap: anywhere; }
-  .meta .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 5px; vertical-align: 1px; }
-  .meta .dot.on { background: var(--cap); }
-  .next { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-  .step { font-size: 12px; color: var(--muted); max-width: 320px; text-align: right; }
+  /* top bar */
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .topbar .wrap { min-height: 56px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; padding-top: 8px; padding-bottom: 8px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+  .brand svg { width: 22px; height: 22px; flex: none; }
+  .brand .crumb { color: var(--muted); font-weight: 400; }
+  .brand .crumb::before { content: "/"; margin: 0 8px 0 2px; color: var(--line-strong); }
+  .hright { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: flex-end; min-width: 0; }
+  .meta { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunken); color: var(--ink-2); font-size: 12px; overflow-wrap: anywhere; }
+  .meta span[title] { font-family: var(--mono); }
+  .meta .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+  .meta .dot.on { background: var(--cap); box-shadow: 0 0 0 3px var(--cap-bg); }
+  .next { display: flex; gap: 8px; align-items: center; }
+  .step { font-size: 12px; color: var(--muted); max-width: 340px; }
   .step:empty { display: none; }
+  kbd { font: 500 11px/1 var(--mono); padding: 2px 5px; border: 1px solid currentColor; border-radius: 4px; opacity: .6; margin-left: 6px; }
 
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; padding: 20px 24px 28px; }
-  .listings { display: grid; gap: 16px; align-content: start; min-width: 0; }
-  aside { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  /* page header + ledger */
+  .pagehead { padding-top: 28px; padding-bottom: 20px; display: grid; gap: 20px; }
+  h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .pagehead p { margin: 6px 0 0; color: var(--muted); max-width: 72ch; }
+  .ledger { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+  .kpi { padding: 14px 18px 16px; min-width: 0; }
+  .kpi + .kpi { border-left: 1px solid var(--line); }
+  .kl { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+  .kl i { width: 8px; height: 8px; border-radius: 2px; background: var(--muted); flex: none; }
+  .kl i.held { background: var(--held); } .kl i.captured { background: var(--cap); } .kl i.refunded { background: var(--ref); } .kl i.live { background: var(--focus); }
+  .kv { margin-top: 6px; font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; }
+  .kv small { font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+  .ks { margin-top: 2px; font-size: 12px; color: var(--muted); }
 
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
-  .card.selected { border-color: var(--sel); box-shadow: 0 0 0 1px var(--sel); }
+  main.wrap { display: grid; grid-template-columns: minmax(0, 1fr) 372px; gap: 24px; padding-top: 8px; padding-bottom: 28px; }
+  .colhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+  .colhead h2 { margin: 0; font-size: 15px; font-weight: 600; }
+  main.wrap > section { min-width: 0; }
+  .listings { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; min-width: 0; }
+  aside { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-content: start; min-width: 0; position: sticky; top: 72px; }
+
+  /* listing */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 18px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .card:hover { border-color: var(--line-strong); }
+  .card.selected { border-color: var(--focus); box-shadow: 0 0 0 3px var(--ring); }
   .card.sold-out { cursor: default; }
   .artcol { display: grid; gap: 8px; align-content: start; }
-  .art { width: 120px; height: 120px; border-radius: 10px; display: block; object-fit: cover; }
+  .art { width: 88px; height: 88px; border-radius: 6px; display: block; object-fit: cover; border: 1px solid var(--line); }
   .title { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
-  .title h2 { margin: 0; font-size: 17px; }
-  .badge { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
-  .badge.sold { background: var(--cap-bg); color: var(--cap); border-color: transparent; }
-  .badge.live { border-color: var(--held); color: var(--held); }
-  .badge.kind { font-size: 10px; padding: 1px 6px; font-weight: 600; }
-  .tx { color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .reason { margin: 8px 0 6px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--soft); border-radius: 0 8px 8px 0; font-size: 14px; }
-  .reason b { font-weight: 600; }
-  .price { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
-  .price strong { color: var(--ink); }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; font-size: 12px; }
-  .seg button { border: 0; background: transparent; padding: 4px 10px; cursor: pointer; color: var(--muted); }
-  .seg button.on { background: var(--accent); color: var(--on-accent); }
+  .title h2 { margin: 0 4px 0 0; font-size: 16px; font-weight: 600; }
+  .badge { font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 4px; border: 1px solid var(--line-strong); color: var(--ink-2); background: var(--surface); white-space: nowrap; line-height: 20px; }
+  .badge.sold { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
+  .badge.live { background: var(--held-bg); color: var(--held); border-color: var(--held-line); }
+  .badge.kind { font-size: 11px; padding: 0 6px; line-height: 18px; color: var(--muted); }
+  .tx { color: var(--muted); font-size: 12px; white-space: nowrap; text-decoration: none; }
+  .tx:hover { color: var(--focus); text-decoration: underline; }
+  .price { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
+  .price strong { color: var(--ink); font-weight: 600; }
+  .reason { margin: 0 0 12px; padding: 10px 12px; background: var(--agent); border: 1px solid var(--agent-line); border-radius: 6px; font-size: 13px; color: var(--ink-2); }
+  .reason .rl { display: block; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunken); font-size: 12px; }
+  .seg button { border: 0; background: transparent; padding: 3px 10px; border-radius: 4px; cursor: pointer; color: var(--muted); font-weight: 500; }
+  .seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line-strong); }
   .trade { display: none; margin-left: auto; }
-  .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; font-size: 12px; color: var(--muted); }
+  .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 4px; font-size: 12px; color: var(--muted); }
 
-  .sub { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
-  .thread { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 6px; font-size: 13px; display: grid; gap: 8px; }
-  .turn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+  .sub { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 16px 0 6px; }
+  .thread { border: 1px solid var(--line); border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 13px; display: grid; gap: 10px; background: var(--sunken); }
+  .turn { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
   .turn.s { align-items: flex-end; text-align: right; }
-  .turn .head { display: flex; flex-wrap: wrap; gap: 3px 6px; align-items: center; font-size: 11px; color: var(--muted); }
+  .turn .head { display: flex; flex-wrap: wrap; gap: 3px 6px; align-items: center; font-size: 12px; color: var(--muted); }
   .turn.s .head { justify-content: flex-end; }
   .turn .who { font-weight: 600; color: var(--ink); }
-  .turn .amt { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
-  .turn .readtag { font-size: 10px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); }
-  .bubble { padding: 4px 9px; border-radius: 12px; background: var(--soft); max-width: 100%; }
-  .turn .bubble { max-width: 88%; padding: 6px 10px; border-radius: 14px 14px 14px 4px; overflow-wrap: anywhere; text-align: left; }
-  .turn.s .bubble { background: var(--accent); color: var(--on-accent); border-radius: 14px 14px 4px 14px; }
-  .chat { margin-top: 10px; display: grid; gap: 8px; font-size: 13px; max-height: 300px; overflow-y: auto; }
+  .turn .amt { font-weight: 600; color: var(--ink); }
+  .turn .readtag { font-size: 11px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--agent-line); background: var(--agent); color: var(--ink-2); }
+  .bubble { padding: 4px 9px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); max-width: 100%; }
+  .turn .bubble { max-width: 88%; padding: 6px 10px; border-radius: 8px 8px 8px 2px; overflow-wrap: anywhere; text-align: left; }
+  .turn.s .bubble { background: var(--agent); border-color: var(--agent-line); border-radius: 8px 8px 2px 8px; }
+  .chat { margin-top: 12px; display: grid; gap: 10px; font-size: 13px; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--sunken); }
   .chat:empty { display: none; }
-  .deal { color: var(--cap); font-weight: 700; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .deal { color: var(--cap); font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 
-  .tablewrap { overflow-x: auto; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td + td { width: 1%; white-space: nowrap; padding-left: 10px; }
+  td { padding: 7px 10px; vertical-align: middle; }
+  tr + tr td { border-top: 1px solid var(--line); }
+  td.num { text-align: right; }
+  td + td { width: 1%; white-space: nowrap; }
   td.r { text-align: right; white-space: nowrap; }
-  .chip { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
-  .held { background: var(--held-bg); color: var(--held); }
-  .captured { background: var(--cap-bg); color: var(--cap); }
-  .refunded { background: var(--ref-bg); color: var(--ref); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 0 7px; line-height: 20px; border-radius: 4px; border: 1px solid var(--line-strong); white-space: nowrap; text-transform: capitalize; }
+  .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .held { background: var(--held-bg); color: var(--held); border-color: var(--held-line); }
+  .captured { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
+  .refunded { background: var(--ref-bg); color: var(--ref); border-color: var(--ref-line); }
 
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; min-width: 0; }
-  .panel h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .you { border-color: var(--sel); }
+  /* side panels */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+  .panel > h3 { margin: 0; padding: 12px 16px; font-size: 14px; font-weight: 600; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .panel > h3 small { font-size: 12px; font-weight: 400; color: var(--muted); }
+  .pbody { padding: 14px 16px 16px; }
   .me-line { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-  .me-line .bal { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .selitem { margin: 10px 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--soft); font-size: 13px; display: flex; gap: 10px; align-items: center; }
-  .selitem svg, .selitem img { width: 40px; height: 40px; border-radius: 8px; flex: none; }
+  .me-line .bal { font-size: 20px; font-weight: 600; }
+  .selitem { margin: 12px 0 4px; padding: 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--sunken); font-size: 13px; display: flex; gap: 10px; align-items: center; }
+  .selitem svg, .selitem img { width: 40px; height: 40px; border-radius: 4px; flex: none; }
+  .grp { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .grp > .gl { font-size: 12px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
   .row { display: flex; gap: 8px; margin-top: 8px; }
-  .row input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); }
-  .row input:disabled { opacity: .5; }
-  .msgbox { margin-top: 10px; }
+  .gl + .row { margin-top: 0; }
+  .row input, .msgbox input { height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); }
+  .row input { flex: 1; min-width: 0; }
+  .row input:focus, .msgbox input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px var(--ring); }
+  .row input:disabled, .msgbox input:disabled { background: var(--sunken); color: var(--muted); }
   .msgbox label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
-  .msgbox input { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); }
-  .msgbox input:disabled { opacity: .5; }
-  .qchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .qchip { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); cursor: pointer; }
-  .qchip:hover:not(:disabled) { border-color: var(--muted); }
+  .msgbox input { width: 100%; }
+  .qchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+  .qchip { font-size: 12px; padding: 2px 9px; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); cursor: pointer; }
+  .qchip:hover:not(:disabled) { border-color: var(--focus); color: var(--ink); }
   .qchip:disabled { opacity: .45; cursor: not-allowed; }
-  .btn { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); border-radius: 9px; padding: 7px 12px; cursor: pointer; font-weight: 600; white-space: nowrap; }
-  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-  .btn.small { padding: 3px 9px; font-size: 12px; border-radius: 7px; }
-  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn { height: 34px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); border-radius: 6px; padding: 0 14px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+  .btn:hover:not(:disabled) { opacity: .88; }
+  .btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
+  .btn.ghost:hover:not(:disabled) { opacity: 1; background: var(--sunken); }
+  .btn.small { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 5px; }
+  .btn:disabled { opacity: .38; cursor: not-allowed; }
   .row .btn.grow { flex: 1; }
   .reply { margin-top: 10px; font-size: 13px; }
   .reply:empty, .err:empty { display: none; }
-  .reply .bubble { display: inline-block; background: var(--accent); color: var(--on-accent); }
+  .reply .bubble { display: inline-block; background: var(--cap-bg); border-color: var(--cap-line); color: var(--cap); }
   .reply .bubble a { color: inherit; }
-  .err { margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: var(--err-bg); color: var(--err); font-size: 13px; }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .err { margin-top: 10px; padding: 8px 10px; border-radius: 6px; background: var(--err-bg); border: 1px solid var(--err-line); color: var(--err); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .hint:empty { display: none; }
-  .wallets { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .wallets { display: grid; grid-template-columns: minmax(0, 1fr) auto; font-size: 13px; }
+  .wallets > span { padding: 7px 16px; border-top: 1px solid var(--line); }
+  .wallets > span:nth-child(-n+2) { border-top: 0; }
+  .wallets > span:nth-child(even) { text-align: right; font-weight: 500; }
   .wallets .nm { display: flex; gap: 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
-  .wallets .me { font-weight: 700; }
-  .log { list-style: none; margin: 0; padding: 0; max-height: 52vh; overflow: auto; font-size: 13px; }
-  .log li { padding: 6px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-  .log .t { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 11px; margin-right: 6px; }
-  .log .who { font-weight: 600; margin-right: 4px; }
-  .log a { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  .wallets .me { font-weight: 600; }
+  .log { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow: auto; font-size: 13px; }
+  .log li { padding: 8px 16px; border-top: 1px solid var(--line); overflow-wrap: anywhere; color: var(--ink-2); }
+  .log li:first-child { border-top: 0; }
+  .log .t { color: var(--muted); font-size: 12px; margin-right: 8px; }
+  .log .who { font-weight: 600; color: var(--ink); margin-right: 4px; }
+  .log a { color: var(--muted); font-size: 12px; margin-left: 6px; }
   .empty { color: var(--muted); font-size: 13px; }
+  .wallets .empty, .log .empty { padding: 10px 16px; }
 
-  footer { padding: 0 24px 32px; }
-  footer h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .rails { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-  .rail { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13px; text-decoration: none; display: grid; gap: 2px; }
-  a.rail:hover { border-color: var(--muted); }
-  .rail .rn { font-weight: 700; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .rail .st { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 1px 6px; border-radius: 999px; background: var(--soft); color: var(--muted); }
-  .rail .st.live { background: var(--cap-bg); color: var(--cap); }
+  footer.wrap { padding-bottom: 40px; }
+  .rails { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .rail { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 13px; text-decoration: none; display: grid; gap: 2px; }
+  a.rail:hover { border-color: var(--focus); }
+  .rail .rn { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .rail .st { font-size: 11px; font-weight: 500; padding: 0 6px; line-height: 18px; border-radius: 4px; border: 1px solid var(--line-strong); color: var(--muted); text-transform: capitalize; }
+  .rail .st.live { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
   .rail .rd { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
-  @media (max-width: 900px) {
-    main { grid-template-columns: 1fr; padding: 16px; }
-    header { padding: 16px; }
-    footer { padding: 0 16px 24px; }
-    .hright { justify-items: start; }
-    .meta, .step { text-align: left; }
-    .next { justify-content: flex-start; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+  @media (max-width: 1000px) {
+    main.wrap { grid-template-columns: minmax(0, 1fr); }
+    aside { position: static; }
     .trade { display: inline-block; }
+  }
+  @media (max-width: 720px) {
+    .wrap { padding-left: 16px; padding-right: 16px; }
+    kbd { display: none; }
+    .topbar { position: static; }
+    .hright { justify-content: flex-start; }
+    .ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpi:nth-child(3) { border-left: 0; }
+    .kpi:nth-child(n+3) { border-top: 1px solid var(--line); }
+    .kv { font-size: 22px; }
   }
   @media (max-width: 520px) {
     .card { display: block; padding: 14px; }
     .card::after { content: ""; display: block; clear: both; }
     .artcol { float: left; margin: 0 12px 6px 0; }
-    .art { width: 72px; height: 72px; }
+    .art { width: 64px; height: 64px; }
+    .badge { white-space: normal; }
     .reason, .price { display: flow-root; }
     .sub, .thread, .tablewrap { clear: both; }
   }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>Holdback Gallery</h1>
-    <p>A seller agent sells monkey NFTs to buyer agents (and you), choosing offers, auction, falling price or buy-now from demand. Every offer, bid and purchase is an on-chain <b>hold</b>: captured when the deal clears, refunded otherwise.</p>
-    <div class="legend"><span class="chip held">held</span> in escrow <span class="chip captured">captured</span> paid to seller <span class="chip refunded">refunded</span> back to buyer</div>
-  </div>
-  <div class="hright">
-    <div class="meta" id="meta"><span class="dot"></span>connecting…</div>
-    <div class="next"><button class="btn" id="nextBtn" title="Advance the scripted scenario (Space)">Next scene ▶</button></div>
-    <div class="step" id="scenario"></div>
-    <div class="step" id="step"></div>
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+      <span>Holdback</span><span class="crumb">Gallery</span>
+    </div>
+    <div class="hright">
+      <div class="meta" id="meta"><span class="dot"></span>Connecting…</div>
+      <div class="step" id="scenario"></div>
+      <div class="step" id="step"></div>
+      <div class="next"><button class="btn" id="nextBtn" title="Advance the scripted scenario">Next scene<kbd>Space</kbd></button></div>
+    </div>
   </div>
 </header>
-<main>
-  <section class="listings" id="listings"><div class="empty">Waiting for the market…</div></section>
+<section class="wrap pagehead">
+  <div>
+    <h1>Escrowed sales</h1>
+    <p>A seller agent sells monkey NFTs to buyer agents and to you. It picks offers, an auction, a falling price or buy-now from demand. Every offer, bid and purchase is an on-chain hold: captured when the deal clears, refunded otherwise.</p>
+  </div>
+  <div class="ledger" id="kpis" aria-label="Escrow totals"></div>
+</section>
+<main class="wrap">
+  <section>
+    <div class="colhead"><h2>Listings</h2><span class="muted" id="listCount"></span></div>
+    <div class="listings" id="listings"><div class="empty">Waiting for the market…</div></div>
+  </section>
   <aside>
     <div class="panel you" id="you">
-      <h3>You</h3>
-      <div class="me-line"><span id="meName" class="muted">Creating your wallet…</span><span><span class="bal" id="meBal">–</span> <span class="muted">dUSDC</span></span></div>
-      <div class="selitem" id="selItem"><span class="muted">Tap an item to trade on it.</span></div>
-      <div class="msgbox"><label for="msgTxt">Message to the seller (optional)</label>
-        <input id="msgTxt" type="text" maxlength="280" autocomplete="off" placeholder="Explain your offer, or ask about the piece">
-        <div class="qchips" id="qchips" aria-label="Quick messages">
-          <button type="button" class="qchip" data-fill="I'm a student — any flexibility?">I'm a student — any flexibility?</button>
-          <button type="button" class="qchip" data-fill="Huge fan of this series!">Huge fan of this series!</button>
-          <button type="button" class="qchip" data-fill="Would you do a bundle?">Would you do a bundle?</button>
+      <h3>Buyer console <small>Your demo wallet</small></h3>
+      <div class="pbody">
+        <div class="me-line"><span id="meName" class="muted">Creating your wallet…</span><span><span class="bal" id="meBal">–</span> <span class="muted">dUSDC</span></span></div>
+        <div class="selitem" id="selItem"><span class="muted">Select a listing to trade on it.</span></div>
+        <div class="hint" id="hint"></div>
+        <div class="grp">
+          <div class="gl">Negotiate</div>
+          <div class="msgbox"><label for="msgTxt">Message to the seller (optional)</label>
+            <input id="msgTxt" type="text" maxlength="280" autocomplete="off" placeholder="Explain your offer, or ask about the piece">
+            <div class="qchips" id="qchips" aria-label="Quick messages">
+              <button type="button" class="qchip" data-fill="I'm a student — any flexibility?">I'm a student — any flexibility?</button>
+              <button type="button" class="qchip" data-fill="Huge fan of this series!">Huge fan of this series!</button>
+              <button type="button" class="qchip" data-fill="Would you do a bundle?">Would you do a bundle?</button>
+            </div>
+          </div>
+          <div class="row"><input id="offerAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="Offer amount" aria-label="Offer amount"><button class="btn" id="bOffer">Make offer</button></div>
+          <div class="row"><button class="btn ghost grow" id="bAccept">Accept counter</button><button class="btn ghost grow" id="bWalk">Walk away</button></div>
         </div>
+        <div class="grp">
+          <div class="gl">Auction</div>
+          <div class="row"><input id="bidMax" type="number" min="1" step="1" inputmode="numeric" placeholder="Your max bid" aria-label="Max bid"><button class="btn" id="bBid">Place bid</button></div>
+        </div>
+        <div class="grp">
+          <div class="gl">Fixed price</div>
+          <div class="row"><button class="btn grow" id="bBuy">Buy now</button></div>
+        </div>
+        <div class="chat" id="chat" aria-live="polite"></div>
+        <div class="reply" id="reply"></div>
+        <div class="err" id="err" role="alert"></div>
+        <div class="sub">Your holds</div>
+        <div id="myHolds"><div class="empty">None yet.</div></div>
       </div>
-      <div class="row"><input id="offerAmt" type="number" min="1" step="1" inputmode="numeric" placeholder="Offer amount" aria-label="Offer amount"><button class="btn" id="bOffer">Make offer</button></div>
-      <div class="row"><button class="btn ghost grow" id="bAccept">Accept counter</button><button class="btn ghost grow" id="bWalk">Walk away</button></div>
-      <div class="row"><input id="bidMax" type="number" min="1" step="1" inputmode="numeric" placeholder="Your max bid" aria-label="Max bid"><button class="btn" id="bBid">Place bid</button></div>
-      <div class="row"><button class="btn grow" id="bBuy">Buy now</button></div>
-      <div class="hint" id="hint"></div>
-      <div class="chat" id="chat" aria-live="polite"></div>
-      <div class="reply" id="reply"></div>
-      <div class="err" id="err" role="alert"></div>
-      <div class="sub">Your holds</div>
-      <div id="myHolds"><div class="empty">None yet.</div></div>
     </div>
-    <div class="panel"><h3>Wallets (dUSDC)</h3><div class="wallets" id="wallets"></div></div>
-    <div class="panel"><h3>What just happened</h3><ul class="log" id="log"></ul></div>
+    <div class="panel"><h3>Wallets <small>dUSDC</small></h3><div class="wallets" id="wallets"></div></div>
+    <div class="panel"><h3>Activity</h3><ul class="log" id="log"></ul></div>
   </aside>
 </main>
-<footer>
-  <h3>Payment rails</h3>
+<footer class="wrap">
+  <div class="colhead"><h2>Settlement rails</h2></div>
   <div class="rails" id="rails"></div>
 </footer>
 <script>
@@ -316,7 +410,7 @@ function threads(it) {
       return turnHTML(t, who, c);
     }).join("");
     const deal = it.status === "sold" && it.soldTo != null && displayName(it.soldTo) === who
-      ? `<div class="deal">✅ Deal at ${fmt(it.soldFor)} dUSDC ${txLink(it.saleTx)}</div>` : "";
+      ? `<div class="deal">Deal closed at ${fmt(it.soldFor)} dUSDC ${txLink(it.saleTx)}</div>` : "";
     return `<div class="thread">${rows}${deal}</div>`;
   }).join("");
 }
@@ -331,7 +425,7 @@ function turnHTML(t, who, extra = "") {
       : { offer: `offers ${amt}`, accept: `accepts ${amt}`, walk_away: "walks away", decline: "declines", counter: `counters ${amt}` })[t.action] || esc(t.action);
     return `<div class="turn b"><div class="head"><span class="who">${esc(who)}</span> ${verb} ${extra}</div>${body}</div>`;
   }
-  const verb = { counter: `counters ${amt}`, accept: `✅ accepts ${amt}`, decline: `declines${t.amount ? ` · ask ${amt}` : ""}`, walk_away: "ends talks", offer: `offers ${amt}` }[t.action] || esc(t.action);
+  const verb = { counter: `counters ${amt}`, accept: `accepts ${amt}`, decline: `declines${t.amount ? ` · ask ${amt}` : ""}`, walk_away: "ends talks", offer: `offers ${amt}` }[t.action] || esc(t.action);
   const read = t.read && t.read.length ? `<span class="readtag" title="What the seller agent picked up from the message">read: ${esc(t.read.map((x) => x.replace("_", " ")).join(", "))}</span>` : "";
   return `<div class="turn s"><div class="head">${read}<span class="who">Seller</span> ${verb}</div>${body}</div>`;
 }
@@ -353,7 +447,7 @@ function cardHTML(it) {
   return `<div class="artcol">${art(it)}</div>
     <div style="min-width:0">
       <div class="title"><h2>${esc(it.name)}</h2>${mechBadge(it)}</div>
-      ${it.reason ? `<div class="reason"><b>Seller agent:</b> ${esc(it.reason)}</div>` : ""}
+      ${it.reason ? `<div class="reason"><span class="rl">Seller agent decision</span>${esc(it.reason)}</div>` : ""}
       <div class="price">${priceLine(it)}</div>
       ${goal}
       ${threads(it)}
@@ -377,6 +471,32 @@ function renderItems() {
     setHTML(el, cardHTML(it), "card:" + it.id);
   });
   [...box.children].forEach((el) => { if (!seen.has(el.dataset.id)) { el.remove(); cache.delete("card:" + el.dataset.id); } });
+}
+
+// escrow totals across every listing: what is held now, what went to the seller, what went back
+function renderKpis() {
+  const items = S.items || [];
+  const sum = { held: 0, captured: 0, refunded: 0 }, n = { held: 0, captured: 0, refunded: 0 };
+  for (const it of items) for (const h of it.holds || []) {
+    const amt = Number(h.amount) || 0;
+    if (h.status === "held") { sum.held += amt; n.held++; }
+    else if (h.status === "captured") {
+      const c = h.captured != null ? Number(h.captured) : amt;
+      sum.captured += c; n.captured++;
+      if (amt > c) sum.refunded += amt - c; // partial capture: the rest went back
+    } else if (h.status === "refunded") { sum.refunded += amt; n.refunded++; }
+  }
+  const live = items.filter((i) => i.status === "listed").length;
+  const holds = (k) => `${n[k]} hold${n[k] === 1 ? "" : "s"}`;
+  const cell = (cls, label, value, unit, sub) => `<div class="kpi"><div class="kl"><i class="${cls}"></i>${label}</div><div class="kv">${value}${unit ? `<small>${unit}</small>` : ""}</div><div class="ks">${sub}</div></div>`;
+  setHTML($("kpis"), [
+    cell("held", "Held in escrow", fmt(sum.held), "dUSDC", `${holds("held")} open`),
+    cell("captured", "Paid to seller", fmt(sum.captured), "dUSDC", `${holds("captured")} captured`),
+    cell("refunded", "Returned to buyers", fmt(sum.refunded), "dUSDC", `${holds("refunded")} refunded, plus partial captures`),
+    cell("live", "Live listings", String(live), "", `${items.length - live} sold or closed`),
+  ].join(""));
+  const cnt = `${items.length} item${items.length === 1 ? "" : "s"}`;
+  if ($("listCount").textContent !== cnt) $("listCount").textContent = cnt;
 }
 
 function renderWallets() {
@@ -461,7 +581,7 @@ function renderYou() {
   $("bidMax").placeholder = it && m === "auction" ? `Your max bid (ask ${fmt(it.ask)})` : "Your max bid";
   setHTML($("selItem"), it
     ? `${art(it, "")}<div style="min-width:0"><b>${esc(it.name)}</b><div class="muted">${esc(MECH[m] || m || "")} · ${it.status === "listed" ? `ask ${fmt(it.ask)}${m === "dutch" ? ` · now ${fmt(it.price)}` : ""}` : it.status === "sold" ? `sold for ${fmt(it.soldFor)}` : "unsold"}</div></div>`
-    : `<span class="muted">Tap an item to trade on it.</span>`);
+    : `<span class="muted">Select a listing to trade on it.</span>`);
   $("hint").textContent = !me ? "Setting up your demo wallet (300 dUSDC)…"
     : !it ? "" : !listed ? "This item is no longer for sale."
     : m === "offers" ? "Your offer is held on-chain; the seller agent answers at once."
@@ -488,7 +608,7 @@ function render() {
     const first = items.find((i) => i.status === "listed") || items[0];
     if (first) select(first.id, false);
   }
-  renderMeta(); renderScenario(); renderItems(); renderWallets(); renderLog(); renderRails(); renderYou(); tick();
+  renderMeta(); renderScenario(); renderKpis(); renderItems(); renderWallets(); renderLog(); renderRails(); renderYou(); tick();
 }
 
 function tick() {
@@ -582,7 +702,7 @@ $("bAccept").onclick = () => act(async () => {
   const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, withMsg({ buyerId: me.id, action: "accept" }));
   sentMsg();
   const h = r && r.hold;
-  note(it.id, `<span class="bubble">✅ You bought it${h ? ` for <b>${fmt(h.captured ?? h.amount)}</b> dUSDC` : ""}</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
+  note(it.id, `<span class="bubble">You bought it${h ? ` for <b>${fmt(h.captured ?? h.amount)}</b> dUSDC` : ""}</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
 });
 $("bWalk").onclick = () => act(async () => {
   const it = selItem();
@@ -602,7 +722,7 @@ $("bBuy").onclick = () => act(async () => {
   const it = selItem();
   const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/buy`, { buyerId: me.id });
   const h = r && r.hold;
-  note(it.id, `<span class="bubble">✅ Bought for <b>${fmt(h ? (h.captured ?? h.amount) : it.price)}</b> dUSDC</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
+  note(it.id, `<span class="bubble">Bought for <b>${fmt(h ? (h.captured ?? h.amount) : it.price)}</b> dUSDC</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
 });
 $("myHolds").addEventListener("click", (e) => {
   const b = e.target.closest("[data-reclaim]"); if (!b) return;
