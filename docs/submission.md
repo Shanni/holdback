@@ -13,7 +13,7 @@ Holdback brings the auth-capture payment lifecycle (authorize, capture any amoun
 
 **Team:** [Shan Liu, founder of Auspice (auspiceoracle.com) and Project Sienna; background …; location …]
 
-**GitHub:** [repo URL; if private, grant read access to hackathon@colosseum.com]
+**GitHub:** https://github.com/Shanni/holdback (public, MIT)
 
 **Pitch video (2–3 min):** [link]   **Demo video (≤3 min):** [link]
 
