@@ -102,7 +102,20 @@ Explorer: https://explore.testnet.tempo.xyz
 
 Arbitrum Orbit, with ETH as gas. The contract and scripts are the same as on Tempo.
 
-**Status: not deployed yet (see below).** The full flow was simulated on an
+**Status: deployed and demoed live on Oct 12, 2026.**
+
+Contract: [`0xED594057c6350D622d95a19e7FE96f0565E1E7dF`](https://explorer.testnet.chain.robinhood.com/address/0xED594057c6350D622d95a19e7FE96f0565E1E7dF) ([deploy tx](https://explorer.testnet.chain.robinhood.com/tx/0xf2f2876080ff4d460544a2040f187289e437523f2bf74a6c8cac9efa45956f37))
+
+| Step | Transaction |
+|---|---|
+| Winning bid: approve 3 TSLA | [tx](https://explorer.testnet.chain.robinhood.com/tx/0xdfd1c7ac1ddc489ea74a64bc9f92be228803f5c379a210c3685bcfb3bd061b7d) |
+| authorize (hold) 3 TSLA | [tx](https://explorer.testnet.chain.robinhood.com/tx/0xaded4af1a2e3de5b8f91313fa7511d523d9078d08c357b2e5c460a6d6cd835b3) |
+| capture 2.5 TSLA (second price), 0.5 back to the buyer | [tx](https://explorer.testnet.chain.robinhood.com/tx/0x302aa8b488588df0e1c192a6c71d42f205822df97491296bcd91c3a41cd94d66) |
+| Losing bid: approve 1 AMZN | [tx](https://explorer.testnet.chain.robinhood.com/tx/0xc2976976af046de1c9cf1c21d53cbe601592650240d0ffb70851638dc1eb34ac) |
+| authorize (hold) 1 AMZN | [tx](https://explorer.testnet.chain.robinhood.com/tx/0xc1e10c175b82cb529854e9746cf146b1e51bd89ca2b1fd0d86f74bd5a326279c) |
+| void (full refund) | [tx](https://explorer.testnet.chain.robinhood.com/tx/0xbcfe2a1a55ff6047a945672e94c18007cbb1a1a496c9f742c93418c0f5d0bbd3) |
+
+Before the live run, the full flow was simulated on an
 `anvil --fork-url https://rpc.testnet.chain.robinhood.com` fork, impersonating the real
 deployer `0x0682f914B558ee3f7bd3d8827852E08E5F9E0759` and the real TSLA and AMZN tokens:
 
@@ -120,7 +133,7 @@ At the observed gas price of 0.01 gwei, the whole run costs about 1e-5 ETH, plus
 
 The demo buyer is the existing funded deployer, `../.keys/robinhood-deployer.json`, which
 `chains.sh` reads at runtime and never prints. The merchant is a new throwaway key,
-`.keys/robinhood-merchant` (`0x5489F79e72C7143CabAdba9Ab3c7707A457894bc`). To run it live:
+`.keys/robinhood-merchant` (`0x5489F79e72C7143CabAdba9Ab3c7707A457894bc`). To run it again:
 
 ```bash
 ./deploy.sh robinhood && ./demo.sh robinhood

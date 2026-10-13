@@ -88,5 +88,7 @@ Prior work by the same founder, used as context and as the first merchants, not 
 - **true-solar-time-mcp**, a published MCP server.
 
 ## Status and next steps
-- Solana: tested on a local validator; devnet deployment pending funding.
+- Solana: 12 program tests on a local validator; devnet deployment pending funding.
+- Robinhood Chain testnet: `HoldbackEscrow` [deployed](https://explorer.testnet.chain.robinhood.com/address/0xED594057c6350D622d95a19e7FE96f0565E1E7dF); a bid held 3 tokenized TSLA, [captured 2.5](https://explorer.testnet.chain.robinhood.com/tx/0x302aa8b488588df0e1c192a6c71d42f205822df97491296bcd91c3a41cd94d66) and refunded 0.5; a losing AMZN bid was [voided](https://explorer.testnet.chain.robinhood.com/tx/0xbcfe2a1a55ff6047a945672e94c18007cbb1a1a496c9f742c93418c0f5d0bbd3). See `tempo/README.md`.
+- Tempo testnet: same contract, 18 Foundry tests; deployment waiting on the testnet faucet.
 - Next: real NFT standards (Metaplex Core / pNFT transfer adapters), an on-chain auction book so the second-price rule is enforced by the program rather than the seller agent, Kora for gasless buyers, and a draft Solana binding for the x402 `auth-capture` scheme.

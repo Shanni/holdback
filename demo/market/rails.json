@@ -1,0 +1,4 @@
+[
+  { "id": "robinhood", "name": "Robinhood Chain testnet", "status": "live", "explorer": "https://explorer.testnet.chain.robinhood.com/tx/0x302aa8b488588df0e1c192a6c71d42f205822df97491296bcd91c3a41cd94d66", "note": "HoldbackEscrow: bid held 3 TSLA, captured 2.5, 0.5 refunded" },
+  { "id": "tempo", "name": "Tempo testnet", "status": "ready", "explorer": "https://explore.testnet.tempo.xyz", "note": "Same contract, 18 tests; deploy waiting on the testnet faucet" }
+]
