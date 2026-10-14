@@ -1,69 +1,52 @@
+// StripeProvider against Stripe test mode. Needs STRIPE_SECRET_KEY / STRIPE_PUBLISHABLE_KEY (sk_test_) in .env;
+// skipped otherwise. No real money moves in test mode.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FakeCardProvider } from "./payments.mts";
+import crypto from "node:crypto";
+import { paymentsFromEnv, PaymentError, type HoldProvider } from "./payments.mts";
 
-async function setup() {
-  let t = 0;
-  const p = new FakeCardProvider({ now: () => t });
-  const card = await p.createAccount("Ada", 300);
-  return { p, card: card.id, advance: (ms: number) => (t += ms) };
-}
+try { process.loadEnvFile(new URL("../../.env", import.meta.url).pathname); } catch {}
+const live = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_");
+const skip = live ? false : "needs Stripe test keys in .env";
 
-test("authorize reserves credit; partial capture releases the rest", async () => {
-  const { p, card } = await setup();
-  const a = await p.authorize(card, 120);
-  assert.equal(await p.available(card), 180);
+let p: HoldProvider, customer: string, card: string;
+const key = () => crypto.randomUUID();
+const hold = (amount: number, paymentMethod = card) =>
+  p.authorize({ customer, paymentMethod, amount, idempotencyKey: key(), description: "holdback test", metadata: { test: "1" } });
+
+test("setup: customer with Stripe's test Visa", { skip }, async () => {
+  p = paymentsFromEnv();
+  customer = await p.createCustomer("Holdback test", { test: "1" });
+  const saved = await p.attachTestCard(customer);
+  card = saved.paymentMethod;
+  assert.match(saved.label, /Visa •••• 4242/);
+});
+
+test("authorize, then capture part: the rest is released", { skip }, async () => {
+  const a = await hold(120);
+  assert.equal(a.status, "authorized");
+  assert.ok(a.expiresAt && a.expiresAt > Date.now(), "authorization has a capture deadline");
   const c = await p.capture(a.id, 96);
   assert.equal(c.status, "captured");
-  assert.equal(await p.available(card), 204);
-  assert.equal(p.merchantBalance, 96);
+  assert.equal(c.captured, 96);
 });
 
-test("declines above available credit", async () => {
-  const { p, card } = await setup();
-  await assert.rejects(p.authorize(card, 301), /declined/);
+test("void releases an authorization; it can't be captured afterwards", { skip }, async () => {
+  const a = await hold(40);
+  assert.equal((await p.void(a.id)).status, "voided");
+  await assert.rejects(p.capture(a.id, 40), PaymentError);
 });
 
-test("capture cannot exceed the authorization or run twice", async () => {
-  const { p, card } = await setup();
-  const a = await p.authorize(card, 50);
-  await assert.rejects(p.capture(a.id, 51), /between/);
-  await p.capture(a.id, 50);
-  await assert.rejects(p.capture(a.id, 10), /captured/);
+test("refund after capture, partial then full", { skip }, async () => {
+  const a = await hold(30);
+  await p.capture(a.id, 30);
+  assert.equal((await p.refund(a.id, 10)).refunded, 10);
+  const r = await p.refund(a.id);
+  assert.equal(r.status, "refunded");
+  assert.equal(r.refunded, 30);
 });
 
-test("void returns everything and blocks capture", async () => {
-  const { p, card } = await setup();
-  const a = await p.authorize(card, 80);
-  await p.void(a.id);
-  assert.equal(await p.available(card), 300);
-  await assert.rejects(p.capture(a.id, 80), /voided/);
-});
-
-test("refund only after capture, partial refunds add up", async () => {
-  const { p, card } = await setup();
-  const a = await p.authorize(card, 100);
-  await assert.rejects(p.refund(a.id), /captured/);
-  await p.capture(a.id, 100);
-  assert.equal((await p.refund(a.id, 40)).status, "captured");
-  assert.equal((await p.refund(a.id)).status, "refunded");
-  assert.equal(await p.available(card), 300);
-  assert.equal(p.merchantBalance, 0);
-  await assert.rejects(p.refund(a.id, 1), /refunded/);
-});
-
-test("authorizations expire after 7 days and release the credit", async () => {
-  const { p, card, advance } = await setup();
-  const a = await p.authorize(card, 100);
-  advance(7 * 86400 * 1000);
-  await assert.rejects(p.capture(a.id, 100), /expired/);
-  assert.equal(await p.available(card), 300);
-});
-
-test("idempotency key returns the same authorization", async () => {
-  const { p, card } = await setup();
-  const a = await p.authorize(card, 30, "k1");
-  const b = await p.authorize(card, 30, "k1");
-  assert.equal(a.id, b.id);
-  assert.equal(await p.available(card), 270);
+test("a declined card becomes a PaymentError", { skip }, async () => {
+  const declined = await p.attachTestCard(customer, "pm_card_chargeDeclined");
+  await assert.rejects(hold(10, declined.paymentMethod), (e: any) => e instanceof PaymentError && /declined/i.test(e.message));
 });

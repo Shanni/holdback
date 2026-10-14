@@ -1,6 +1,42 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { sellerReply, buyerNext, readMessage, sellerNote } from "./negotiation.mts";
+import { sellerReply, readMessage, sellerNote } from "./negotiation.mts";
+
+// A simple buyer that bargains toward its owner's limit, used to exercise the seller.
+type BuyerInput = {
+  ask: number;
+  max: number;                 // owner's spending limit
+  lastOffer?: number;          // our previous offer on this item
+  reply?: { action: "accept" | "counter" | "decline"; amount: number }; // seller's last reply
+  round?: number;              // offers made so far
+  maxRounds?: number;          // give up after this many offers (default 6)
+  open?: number;               // opening fraction of ask (default 0.55)
+};
+
+type BuyerMove =
+  | { action: "offer"; amount: number; message: string }
+  | { action: "accept"; amount: number; message: string }
+  | { action: "walk_away"; message: string }
+  | { action: "done"; message: string };
+
+function buyerNext(i: BuyerInput): BuyerMove {
+  const open = i.open ?? 0.55;
+  if (i.lastOffer === undefined || !i.reply) {
+    const amount = Math.max(1, Math.min(i.max, Math.round(i.ask * open)));
+    return { action: "offer", amount, message: `Would you take ${amount} USD?` };
+  }
+  if (i.reply.action === "accept") return { action: "done", message: "Deal." };
+  if (i.reply.amount <= i.max) {
+    return { action: "accept", amount: i.reply.amount, message: `${i.reply.amount} works for me. Deal.` };
+  }
+  if (i.lastOffer >= i.max || (i.round ?? 0) >= (i.maxRounds ?? 6)) {
+    return { action: "walk_away", message: `${i.reply.amount} is above my owner's limit. I'll pass.` };
+  }
+  const step = Math.max(1, Math.ceil((i.max - i.lastOffer) / 2));
+  const amount = Math.min(i.max, i.reply.amount - 1, i.lastOffer + step);
+  return { action: "offer", amount, message: `I can stretch to ${amount} USD.` };
+}
+
 
 const base = { ask: 100, floor: 50, goal: "best-price" as const };
 
@@ -162,7 +198,7 @@ test("replies reference the message and still state the number", () => {
   assert.match(q.message, /authorized/);
   assert.ok(q.message.includes(`${q.amount} USD`));
   const g = sellerReply({ ...m3, item: { name: "Print", kind: "digital", guarantee: "7 days" }, offer: 70, round: 1, message: "is there a guarantee?" });
-  assert.match(g.message, /7 days money-back guarantee/);
+  assert.match(g.message, /7-day money-back guarantee/);
   const dec = sellerReply({ ...m3, offer: 40, round: 1, message: "I'm broke" });
   assert.equal(dec.action, "decline");
   assert.match(dec.message, /money being tight/);

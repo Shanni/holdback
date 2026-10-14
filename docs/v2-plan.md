@@ -112,10 +112,13 @@ goes away, and these come in its place:
 `HoldProvider` + `FakeCardProvider` (`demo/market/payments.mts`); guarantees are captured at purchase and refunded
 on request; the owner's limit is enforced server-side; the MCP test runs against the real server instead of a mock.
 
-**Phase 1: ledger + auth.** Persisted holds, merchant keys, buyer sessions, server-side limit checks.
-
-**Phase 2: Stripe (test mode).** Offers, proxy auction, buy now, merchant-backed guarantee.
-Exit: the scripted scenario settles end-to-end in Stripe test mode.
+**Phase 1 + 2: real payments, no mock data. Built 2026-10-13 (Stripe test-mode run pending keys).**
+`StripeProvider` (PaymentIntents with manual capture, partial capture, cancel, refunds; live keys refused without
+`ALLOW_LIVE=1`); SQLite persistence for products, buyers and holds with reconciliation on startup; buyer tokens and
+an admin token; merchant admin page (`/admin/`) for products with photos; card setup page (`/card/`) used by people
+and by MCP agent owners; scripted agents, seeded items and placeholder art removed.
+Still to do here: Stripe webhooks (authorization expired/cancelled in the dashboard), buyer accounts by email
+instead of browser-held tokens, an audit log of state transitions.
 
 **Phase 3: splits and judge.** Connect transfers for commission; judge API for pay-if-useful.
 
@@ -126,10 +129,8 @@ Exit: the scripted scenario settles end-to-end in Stripe test mode.
 ## Carry-overs from the v1 review that still apply
 
 - ~~The owner's spending limit can be bypassed~~: fixed in Phase 0 (server checks `max` on every hold).
-- **No auth.** Buyer ids are public, and re-registering a name returns the existing buyer, so anyone can act as anyone.
-  `/api/control/*` is open, and CORS is `*`.
-- **Free account creation.** `POST /api/buyers` funds each new buyer, and the widget creates one per visitor.
-  Rate-limit this.
+- ~~No auth~~: buyer tokens and an admin token (Phase 1). CORS stays `*` for the widget; tokens are bearer headers.
+- ~~Free account creation~~: no free funds any more; new buyers are rate-limited per IP.
 - **Mechanism trust.** Shill bidding is free. A `GET` registers a watcher, and three watchers force an auction.
   Watchers should be authenticated, distinct buyers.
 - **Price grinding.** Repeated floor offers walk the counter down to the floor. Auction ties go by first-insert,

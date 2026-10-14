@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Holdback Add a Card</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Crect x=%272.5%27 y=%272.5%27 width=%2719%27 height=%2719%27 rx=%274%27 fill=%27%23c7b5ff%27 stroke=%27%23000%27 stroke-width=%272%27/%3E%3Crect x=%278%27 y=%278%27 width=%278%27 height=%278%27 rx=%271.5%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet">
+<style>
+  /* Same tokens as the Gallery's purple "Bright" skin (demo/public/index.html) */
+  :root {
+    --band: #c7b5ff; --on-band: #000000; --band-muted: rgba(0, 0, 0, .66); --band-line: rgba(0, 0, 0, .2);
+    --r-btn: 999px; --r-pill: 999px;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --display: Newsreader, "Iowan Old Style", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --canvas: #ffffff; --surface: #ffffff; --sunken: #f6f6f4; --ink: #000000; --ink-2: #1f1f1f; --muted: #5f5f5f;
+    --line: rgba(0, 0, 0, .14); --line-strong: rgba(0, 0, 0, .55); --focus: #000000;
+    --agent: color-mix(in srgb, var(--band) 22%, #ffffff); --agent-line: color-mix(in srgb, var(--band) 55%, #000000 8%);
+    --accent: #000000; --on-accent: #ffffff;
+    --cap: #067647; --cap-bg: #ecfdf3; --cap-line: #abefc6;
+    --held: #b54708; --held-bg: #fffaeb; --held-line: #fedf89;
+    --err: #b42318; --err-bg: #fef3f2; --err-line: #fecdca;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas: #000000; --surface: #000000; --sunken: #0d0d0d; --ink: #ffffff; --ink-2: #e6e6e6; --muted: rgba(255, 255, 255, .6);
+      --line: rgba(255, 255, 255, .16); --line-strong: rgba(255, 255, 255, .6); --focus: var(--band);
+      --agent: color-mix(in srgb, var(--band) 14%, #000000); --agent-line: color-mix(in srgb, var(--band) 40%, #000000);
+      --accent: var(--band); --on-accent: #000000;
+      --cap: #47cd89; --cap-bg: #0a2a1b; --cap-line: #155c3a;
+      --held: #fdb022; --held-bg: #2a1f0a; --held-line: #5c4210;
+      --err: #fda29b; --err-bg: #3a1512; --err-line: #6b2a24; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --canvas: #000000; --surface: #000000; --sunken: #0d0d0d; --ink: #ffffff; --ink-2: #e6e6e6; --muted: rgba(255, 255, 255, .6);
+    --line: rgba(255, 255, 255, .16); --line-strong: rgba(255, 255, 255, .6); --focus: var(--band);
+    --agent: color-mix(in srgb, var(--band) 14%, #000000); --agent-line: color-mix(in srgb, var(--band) 40%, #000000);
+    --accent: var(--band); --on-accent: #000000;
+    --cap: #47cd89; --cap-bg: #0a2a1b; --cap-line: #155c3a;
+    --held: #fdb022; --held-bg: #2a1f0a; --held-line: #5c4210;
+    --err: #fda29b; --err-bg: #3a1512; --err-line: #6b2a24; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { overflow-x: hidden; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  button { font: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 24px; }
+
+  .topbar, .band { background: var(--band); color: var(--on-band); }
+  .topbar { border-bottom: 1px solid var(--band-line); }
+  .topbar .wrap { min-height: 56px; display: flex; gap: 8px 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+  .brand svg { width: 22px; height: 22px; flex: none; }
+  .brand .crumb { color: var(--band-muted); font-weight: 400; }
+  .brand .crumb::before { content: "/"; margin: 0 8px 0 2px; color: var(--band-line); }
+  .testbadge { font: 600 11px/18px var(--mono); letter-spacing: .06em; padding: 0 7px; background: #000; color: var(--band); border-radius: var(--r-pill); }
+  .band { border-bottom: 1px solid var(--band-line); margin-bottom: 28px; }
+  .band .wrap { padding-top: 44px; padding-bottom: 32px; }
+  h1 { margin: 0; font-family: var(--display); font-weight: 300; font-size: 52px; line-height: 1.02; letter-spacing: -0.025em; overflow-wrap: anywhere; }
+  .band p { margin: 12px 0 0; font-size: 16px; color: var(--band-muted); }
+
+  main { padding-bottom: 48px; }
+  .panel { border: 1px solid var(--line); background: var(--surface); padding: 20px; }
+  .how { margin: 0 0 20px; padding: 14px 16px; background: var(--agent); border: 1px solid var(--agent-line); font-size: 13px; color: var(--ink-2); }
+  .how b { color: var(--ink); }
+  .how ul { margin: 6px 0 0; padding-left: 18px; }
+  .how li + li { margin-top: 4px; }
+  .testnote { margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--held-line); background: var(--held-bg); color: var(--ink-2); font-size: 13px; }
+  .testnote code { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  #pe { min-height: 120px; }
+  .loading { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .btn { height: 40px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); border-radius: var(--r-btn); padding: 0 22px; cursor: pointer; font-weight: 500; white-space: nowrap; width: 100%; margin-top: 18px; }
+  .btn:hover:not(:disabled) { opacity: .88; }
+  .btn:disabled { opacity: .38; cursor: not-allowed; }
+  .err { margin-top: 14px; padding: 10px 12px; background: var(--err-bg); border: 1px solid var(--err-line); color: var(--err); font-size: 13px; overflow-wrap: anywhere; }
+  .err:empty { display: none; }
+  .fine { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .done { border: 1px solid var(--cap-line); background: var(--cap-bg); color: var(--cap); padding: 18px 20px; font-size: 15px; }
+  .done strong { display: block; font-family: var(--display); font-weight: 400; font-size: 26px; color: var(--ink); letter-spacing: -0.015em; margin-bottom: 4px; }
+  .done span { color: var(--ink-2); }
+  .gone { border: 1px solid var(--line-strong); padding: 18px 20px; }
+  .gone strong { display: block; font-family: var(--display); font-weight: 400; font-size: 26px; letter-spacing: -0.015em; margin-bottom: 6px; }
+  .gone p { margin: 6px 0 0; color: var(--ink-2); }
+
+  @media (max-width: 520px) {
+    .wrap { padding-left: 16px; padding-right: 16px; }
+    h1 { font-size: 38px; }
+    .band .wrap { padding-top: 28px; padding-bottom: 22px; }
+    .panel { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+      <span>Holdback</span><span class="crumb">Card</span>
+    </div>
+    <span class="testbadge" id="testBadge" hidden title="Test mode: no real money moves">TEST</span>
+  </div>
+</header>
+<div class="band">
+  <div class="wrap">
+    <h1>Add a card</h1>
+    <p id="sub">Loading…</p>
+  </div>
+</div>
+
+<main class="wrap">
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <section class="panel" id="setup" hidden aria-labelledby="formTitle">
+    <h2 id="formTitle" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Card details</h2>
+    <div class="how">
+      <b>How your card is used</b>
+      <ul>
+        <li>Your card is saved with Stripe. Holdback never sees or stores the card number.</li>
+        <li>Holdback places a hold (an authorization) on it only when you make an offer, bid or buy.</li>
+        <li>Nothing is charged until a deal clears. Holds on offers that are declined, withdrawn or outbid are released.</li>
+      </ul>
+    </div>
+    <div class="testnote" id="testNote" hidden>Test mode: use <code>4242 4242 4242 4242</code>, any future date, any CVC.</div>
+    <form id="form">
+      <div id="pe"><div class="loading">Loading the secure card form…</div></div>
+      <div class="err" id="err" role="alert"></div>
+      <button class="btn" id="save" type="submit" disabled>Save card</button>
+      <div class="fine">The card form is served by Stripe (js.stripe.com).</div>
+    </form>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const params = new URLSearchParams(location.search);
+const code = params.get("code") || "";
+const base = `/api/card-setup/${encodeURIComponent(code)}`;
+let stripe, elements, saving = false;
+
+function gone(title, text) {
+  $("setup").hidden = true;
+  $("sub").textContent = "This link can't be used.";
+  $("status").innerHTML = `<div class="gone"><strong>${esc(title)}</strong><p>${esc(text)}</p>
+    <p>Card links are valid for 30 minutes and work once. Ask for a new one: in the Gallery or store, click <b>Add card</b> again; if you run an agent, ask it for a new card link.</p></div>`;
+}
+
+function loadStripe() {
+  if (window.Stripe) return Promise.resolve(window.Stripe);
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://js.stripe.com/v3/";
+    s.onload = () => window.Stripe ? resolve(window.Stripe) : reject(new Error("Stripe.js did not load"));
+    s.onerror = () => reject(new Error("Couldn't load Stripe.js from js.stripe.com. Check your connection or content blocker, then reload."));
+    document.head.appendChild(s);
+  });
+}
+
+function dark() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+async function complete() {
+  const r = await fetch(`${base}/complete`, { method: "POST" });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `${r.status} ${r.statusText}`);
+  const card = d.card || "Card";
+  $("setup").hidden = true;
+  $("sub").textContent = "You're all set.";
+  $("status").innerHTML = `<div class="done"><strong>Card saved: ${esc(card)}.</strong><span>You can close this tab.</span></div>`;
+  try { window.opener?.postMessage({ type: "holdback:card", card }, "*"); } catch {}
+  setTimeout(() => { try { window.close(); } catch {} }, 1800);
+}
+
+async function start() {
+  if (!code) return gone("This link is missing its code", "Open the full card link you were given (it ends in ?code=…).");
+
+  // Back from a bank or 3-D Secure redirect: Stripe appends these to the return_url.
+  if (params.get("setup_intent_client_secret")) {
+    const st = params.get("redirect_status");
+    if (st === "succeeded" || st === "processing") {
+      try { return await complete(); } catch (e) { /* fall through and show the form again */ $("err").textContent = e.message; }
+    } else $("err").textContent = "Your bank didn't confirm the card. Try again or use a different card.";
+    history.replaceState(null, "", `${location.pathname}?code=${encodeURIComponent(code)}`);
+  }
+
+  let s;
+  try {
+    const r = await fetch(base);
+    s = await r.json().catch(() => ({}));
+    if (r.status === 404) return gone("This card link has expired", "The link is no longer valid, or it was already used to save a card.");
+    if (!r.ok) throw new Error(s.error || `${r.status} ${r.statusText}`);
+  } catch (e) {
+    $("sub").textContent = "Something went wrong.";
+    $("status").innerHTML = `<div class="err">${esc(e instanceof TypeError ? "Can't reach the Holdback server. Check your connection and reload." : e.message)}</div>`;
+    return;
+  }
+
+  const test = s.mode === "test";
+  $("testBadge").hidden = !test;
+  $("testNote").hidden = !test;
+  $("sub").textContent = s.buyer ? `For ${s.buyer}` : "Save a card for holds";
+  $("setup").hidden = false;
+
+  try {
+    const Stripe = await loadStripe();
+    stripe = Stripe(s.publishableKey);
+    const d = dark();
+    elements = stripe.elements({
+      clientSecret: s.clientSecret,
+      fonts: [{ cssSrc: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" }],
+      appearance: {
+        theme: d ? "night" : "stripe",
+        variables: {
+          fontFamily: "Inter, system-ui, sans-serif",
+          colorPrimary: d ? "#c7b5ff" : "#000000",
+          colorBackground: d ? "#0d0d0d" : "#ffffff",
+          colorText: d ? "#ffffff" : "#000000",
+          colorDanger: d ? "#fda29b" : "#b42318",
+          borderRadius: "0px",
+        },
+      },
+    });
+    const pe = elements.create("payment", { layout: "tabs" });
+    $("pe").innerHTML = "";
+    pe.mount("#pe");
+    pe.on("ready", () => { $("save").disabled = false; });
+    pe.on("loaderror", (ev) => {
+      $("pe").hidden = true;
+      $("err").textContent = `The card form couldn't load: ${ev?.error?.message || "unknown error"}`;
+    });
+  } catch (e) {
+    $("pe").innerHTML = "";
+    $("err").textContent = e.message;
+  }
+}
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!stripe || !elements || saving) return;
+  saving = true;
+  $("save").disabled = true; $("save").textContent = "Saving…"; $("err").textContent = "";
+  try {
+    const { error, setupIntent } = await stripe.confirmSetup({
+      elements, redirect: "if_required",
+      confirmParams: { return_url: location.href },
+    });
+    if (error) throw new Error(error.message || "The card couldn't be saved.");
+    if (setupIntent && setupIntent.status !== "succeeded" && setupIntent.status !== "processing") {
+      throw new Error(`The card wasn't confirmed (${setupIntent.status}). Try again or use a different card.`);
+    }
+    await complete();
+  } catch (e2) {
+    $("err").textContent = e2 instanceof TypeError ? "Can't reach the Holdback server. Check your connection and try again." : e2.message;
+    $("save").disabled = false; $("save").textContent = "Save card";
+  } finally { saving = false; }
+});
+
+start();
+</script>
+</body>
+</html>

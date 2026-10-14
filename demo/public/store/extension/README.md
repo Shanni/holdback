@@ -17,8 +17,11 @@ Any other site uses the same two lines:
 
 ```html
 <script src="https://YOUR-MARKET/holdback.js" defer></script>
-<div data-holdback-item="monkey-3"></div>
+<div data-holdback-item="YOUR-PRODUCT-ID"></div>
 ```
+
+Shoppers pick a display name and save a card once (the market's `/card/` page opens in a popup) on their first
+offer, bid or purchase; the widget keeps the buyer token in `localStorage` and sends it as a Bearer header.
 
 The demo store at `/store/` (served by the market server) shows the block on a product page in Shopify's default store style.
 It is a local demo page, not a Shopify store.

@@ -1,69 +1,61 @@
-# Holdback market (demo)
+# Holdback market
 
-A seller agent sells one-of-a-kind monkey prints and handmade goods to buyer agents, humans on the page and MCP
-clients. Every offer, bid and purchase is a payment **hold** (a card authorization): captured when the deal
-clears, released otherwise. API contract: `demo/API.md`.
+A seller agent sells the merchant's products to people (Gallery page, store widget) and to AI agents (MCP).
+Every offer, bid and purchase is a payment **hold**, a Stripe card authorization with manual capture: captured
+when the deal clears (possibly for less than was held), released otherwise. API contract: `demo/API.md`.
 
-Payments go through a `HoldProvider` (`payments.mts`). The default, `FakeCardProvider`, is an in-memory card
-processor with the same rules as a real one: an authorization reserves the buyer's available credit, captures can be
-partial but never exceed it, authorizations expire after 7 days, and refunds only follow a capture.
+| File | What |
+|---|---|
+| `server.mts` | HTTP API, SSE, seller agent loop, auctions, holds, buyer and admin auth |
+| `payments.mts` | `HoldProvider` interface and `StripeProvider` (PaymentIntents, `capture_method: manual`) |
+| `db.mts` | SQLite persistence (`node:sqlite`): products, buyers, holds |
+| `negotiation.mts` | Seller replies, counters, buyer-message intents |
+| `../mechanism.mts` | Mechanism choice, second-price settlement, Dutch schedule |
 
 ## Run
 
 ```sh
-node demo/market/server.mts            # server + scripted buyer agents, open http://localhost:4022
-node demo/market/seed-store.mts        # add the handmade goods for /store/
-STEP=1 node demo/market/server.mts     # presenter mode: POST /api/control/next per scene
-curl -XPOST localhost:4022/api/control/next
+cp .env.example .env        # add Stripe test keys: https://dashboard.stripe.com/test/apikeys
+npm start                   # http://localhost:4022
 ```
 
-Tests: `npm test` (mechanism, negotiation, payments) and `npm run test:mcp` (MCP server against a real market).
+- Merchant: open `/admin/`, paste the admin token (`ADMIN_TOKEN`, or `data/admin-token` after the first start),
+  and add products.
+- Buyers: open `/` (Gallery) or `/store/`; the first offer, bid or purchase asks for a card, saved with Stripe on
+  the `/card/` page (test card 4242 4242 4242 4242 in test mode).
+- Agents: see `mcp/README.md`.
+
+State lives in `data/holdback.db` (gitignored). On start the server asks Stripe about every hold that was still
+open, so authorizations voided or expired while it was down are marked released.
+
+Tests: `npm test` (mechanism, negotiation), `npm run test:stripe` (provider against Stripe test mode),
+`npm run test:mcp` (MCP server end to end against a real market on Stripe test mode).
 
 ## Env
 
 | var | default | |
 |---|---|---|
+| `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` | required | test keys; live keys are refused unless `ALLOW_LIVE=1` |
+| `ADMIN_TOKEN` | generated into `data/admin-token` | merchant token for `/api/admin/*` |
 | `PORT` | 4022 | HTTP port |
-| `PACE` | 1 | multiplier on the scripted agents' pauses (0.2 = fast) |
-| `STEP` | off | `1` = one scene per `POST /api/control/next` |
-| `SCENARIO` | on | `0` = no scripted agents (only Monkey #3 is listed, for humans/MCP) |
+| `PUBLIC_URL` | `http://localhost:PORT` | base for card-setup links |
+| `DATA_DIR` | `data` | SQLite database and uploaded images |
 | `AUCTION_SECS` | 45 | proxy auction length |
 | `DUTCH_STEP_SECS` | 6 | Dutch price drops every N seconds |
-| `STALE_SECS` | 20 | default "no interest" time before a listing goes Dutch |
-| `BUYER_USD` | 300 | available credit on each new buyer's demo card |
+| `STALE_SECS` | 20 | default "no interest" time before a unique listing goes Dutch |
+| `SIGNUPS_PER_HOUR` | 20 | new buyers per IP per hour |
 
-## Scenes (agents act only through the HTTP API)
+## How the seller agent sells
 
-1. Seller lists **Monkey #3** (ask 100, hidden floor 70, open to offers: left for humans / MCP) and **Monkey #1** (ask 100, floor 50).
-2. Bo (limit 60) watches Monkey #1 → seller switches to OFFERS. Four rounds: 55→87, 58→79, 59→71, 60→66; Bo walks away and his hold is released.
-3. Ada (120) and Cy (95) watch → 3 watchers → seller switches to a proxy AUCTION.
-4. Cy, Bo, Ada bid their limits (each bid is a binding hold).
-5. Auction closes: Ada's 120 hold is partially captured at 96 (2nd max 95 + 1), 24 released; Cy's and Bo's holds released.
-6. Monkey #2 (ask 90, floor 40) is listed; nobody watches.
-7. No interest → seller switches to a DUTCH auction (90, 80, 70, …).
-8. Bo buys at 60.
-9. A hi-res print (digital, 5 USD, 7-day money-back guarantee): Cy buys and is charged.
-10. Cy asks for the 5 USD back inside the guarantee window and is refunded, no seller approval.
+- **Unique** items are negotiable: open to offers; 3 watchers → proxy auction (`AUCTION_SECS`); no interest
+  for `staleSecs` → Dutch auction down to the floor. The floor never leaves the server.
+- **Digital / physical** items are fixed price, charged at purchase and refundable on request inside the
+  guarantee window (a card authorization would expire before a 7–14 day window ends).
+- Offer bodies accept an optional `message` (≤280 chars) that the seller agent reads locally (rule-based, no LLM)
+  and answers, nudging its concession within the floor.
 
-Pages: `/` Gallery (Listings + Holds ledger, `/#ledger`), `/store/` a Shopify-style store with the
-Holdback widget embedded (`demo/public/holdback.js`). The store's shoppers appear in the Gallery next to the agents.
+## Known gaps (see docs/v2-plan.md)
 
-A human or MCP buyer can join at any time: `POST /api/buyers`, then offer / respond / bid / buy.
-
-## Extensions beyond API.md (backward compatible)
-
-- `POST /api/control/list {name, ask, floor?, goal?, hue?, image?, description?, kind?: "unique"|"digital"|"physical", guaranteeDays?, mechanism?: "offers", staleSecs?}`
-  (seller lists an item; `staleSecs <= 0` = never goes Dutch; `guaranteeDays` defaults to 14 for physical, 7 for digital).
-- `GET /api/state` (same snapshot as `/events`), `GET /api/buyers`.
-- Snapshot: `seller {name, balance}` (captured, net of refunds), `scenario {mode, scene, total, running, next}`.
-- Offer/respond bodies accept an optional `message` (≤280 chars): the seller agent reads it locally (rule-based
-  `readMessage`, no LLM), answers it in its reply, and nudges its concession within the floor
-  (hardship faster, enthusiasm firmer, rude none). Seller turns carry `read: Intent[]`. See "Buyer messages" in `demo/API.md`.
-- Static files: everything in `demo/public/` is served at `/`, directories at their `index.html`
-  (`/holdback.js` is the embeddable widget, `/store/` the Shopify-style demo store).
-- Seller accepts an offer within 3% of ask of its standing counter ("close enough").
-
-## Not production-ready (see docs/v2-plan.md)
-
-No authentication: buyer ids are public and the control endpoints are open. State is in memory. Buyer cards are
-created by the server. These are Phase 1 work.
+- No Stripe webhooks yet: changes made in the Stripe dashboard are picked up only at restart.
+- Auction length must stay well under the 7-day authorization window.
+- Buyer tokens are bearer secrets in the browser's localStorage; there are no buyer accounts or emails yet.

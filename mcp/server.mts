@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Holdback Market MCP server (stdio). A thin HTTP client of the market server (demo/API.md).
 // Run: node mcp/server.mts   (Node 22+ type stripping; no build step)
-// Env: MARKET_URL (default http://localhost:4022), BUYER_NAME (default "Claude"), OWNER_MAX (default 90)
+// Env: MARKET_URL (default http://localhost:4022), BUYER_NAME (default "Claude"), OWNER_MAX (default 90),
+//      HOLDBACK_TOKEN (optional: reuse an existing buyer and its saved card instead of registering a new one)
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -9,12 +10,13 @@ import { z } from "zod";
 const MARKET_URL = (process.env.MARKET_URL || "http://localhost:4022").replace(/\/+$/, "");
 const BUYER_NAME = process.env.BUYER_NAME || "Claude";
 const OWNER_MAX = Number(process.env.OWNER_MAX || 90);
+const ENV_TOKEN = process.env.HOLDBACK_TOKEN?.trim() || undefined;
 
 type Hold = {
   id: string; itemId: string; buyer: string; kind: "offer" | "bid" | "buy";
   amount: number; captured?: number; refunded?: number;
   status: "held" | "captured" | "released" | "refunded";   // released: authorization voided, never charged
-  ref: string;                // card processor reference (authorization id)
+  ref: string;                // card processor reference (Stripe PaymentIntent id)
   refundableUntil?: string;   // guarantee purchases: refund available until then
   at: string; settledAt?: string;
 };
@@ -36,43 +38,101 @@ type Item = {
   guarantee?: string;
   description?: string;
 };
-type Buyer = {
-  id: string; name: string; kind: string; max?: number;
-  card: string;      // payment method label
-  balance: number;   // available credit on that card
+type Me = {
+  id: string; name: string; kind: string;
+  max?: number;        // owner's limit, enforced by the market on every hold
+  hasCard: boolean;
+  card?: string;       // e.g. "Visa •••• 4242"
+  holds: Hold[];
 };
+type CardSetup = { code: string; setupUrl: string; expiresInSecs: number };
+type Config = { provider: { id: string; name: string; mode: "test" | "live" } };
 
 // ---------- HTTP ----------
-class MarketError extends Error {}
+class MarketError extends Error {
+  status: number;
+  data: any;
+  constructor(message: string, status = 0, data: any = {}) { super(message); this.status = status; this.data = data; }
+}
 
-async function api<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+let token: string | undefined = ENV_TOKEN;
+
+async function api<T>(method: "GET" | "POST", path: string, body?: unknown, auth = true): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["content-type"] = "application/json";
+  if (auth && token) headers.authorization = `Bearer ${token}`;
   let res: Response;
   try {
-    res = await fetch(MARKET_URL + path, {
-      method,
-      headers: body ? { "content-type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    res = await fetch(MARKET_URL + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch (e) {
     throw new MarketError(`Cannot reach the Holdback market at ${MARKET_URL} (${(e as Error).message}). Is the market server running?`);
   }
   const text = await res.text();
   let data: any;
   try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text }; }
-  if (!res.ok) throw new MarketError(`Market refused (${res.status}): ${data?.error ?? text}`);
+  if (!res.ok) {
+    if (res.status === 401 && auth && token) {
+      if (token === ENV_TOKEN) {
+        throw new MarketError(`Market refused (401): the HOLDBACK_TOKEN buyer token is not known to the market at ${MARKET_URL}. ` +
+          "Unset HOLDBACK_TOKEN to register a new buyer, or set it to a token this market issued.", 401, data);
+      }
+      // Our own registration is gone (e.g. the market's data was reset): register again on the next call.
+      buyer = null; registering = null; token = undefined;
+      throw new MarketError("Market refused (401): this buyer is no longer known to the market. A new buyer will be registered on the next call (it will need a card again).", 401, data);
+    }
+    throw new MarketError(`Market refused (${res.status}): ${data?.error ?? text}`, res.status, data);
+  }
   return data as T;
 }
 
-let buyer: Buyer | null = null;
-let registering: Promise<Buyer> | null = null;
-async function me(): Promise<Buyer> {
+/** The buyer this server acts for: HOLDBACK_TOKEN's buyer, or one registered on first use (token kept in memory). */
+let buyer: Me | null = null;
+let registering: Promise<Me> | null = null;
+async function me(): Promise<Me> {
   if (buyer) return buyer;
   if (!registering) {
-    registering = api<Buyer>("POST", "/api/buyers", { name: BUYER_NAME, kind: "mcp", max: OWNER_MAX })
-      .then((b) => (buyer = b))
-      .catch((e) => { registering = null; throw e; });
+    registering = (async () => {
+      if (token) return (buyer = await api<Me>("GET", "/api/me"));
+      let r: Me & { token: string };
+      try {
+        r = await api<Me & { token: string }>("POST", "/api/buyers", { name: BUYER_NAME, kind: "mcp", max: OWNER_MAX }, false);
+      } catch (e) {
+        if (e instanceof MarketError) throw new MarketError(`Could not register as a buyer on the market. ${e.message}`, e.status, e.data);
+        throw e;
+      }
+      const { token: t, ...b } = r;
+      token = t;
+      console.error(`[holdback-market] registered buyer "${b.name}" (${b.id}). To keep this buyer and its card across restarts, set HOLDBACK_TOKEN=${t}`);
+      return (buyer = b);
+    })().catch((e) => { registering = null; throw e; });
   }
   return registering;
+}
+
+/** The buyer as the market sees it right now (card saved since the last call?). */
+async function fresh(): Promise<Me> {
+  await me();
+  return (buyer = await api<Me>("GET", "/api/me"));
+}
+
+let config: Config | null = null;
+async function marketMode(): Promise<"test" | "live" | undefined> {
+  try { return (config ??= await api<Config>("GET", "/api/config", undefined, false)).provider.mode; } catch { return undefined; }
+}
+
+/** A fresh card-setup link for the owner, with instructions. */
+async function cardSetupText(): Promise<{ text: string; setup: CardSetup }> {
+  const setup = await api<CardSetup>("POST", "/api/me/card-setup");
+  const mins = Math.round(setup.expiresInSecs / 60);
+  const mode = await marketMode();
+  const lines = [
+    `Ask your owner (the human you are buying for) to open this link in a browser and save a card:`,
+    `  ${setup.setupUrl}`,
+    `The link is valid for ${mins} minutes. Saving the card charges nothing: offers and bids are only authorized (held) on it, and money is captured only when a deal clears.`,
+    `Card setup is the owner's action: do not try to enter card details yourself. Once they say it is saved, retry.`,
+  ];
+  if (mode === "test") lines.push("This market runs in Stripe TEST mode: the owner can use the test card 4242 4242 4242 4242 with any future expiry date and any CVC. No real money moves.");
+  return { text: lines.join("\n"), setup };
 }
 
 // ---------- formatting ----------
@@ -148,19 +208,43 @@ function overMax(amount: number, verb: string) {
 
 async function guard<T>(fn: () => Promise<T>) {
   try { return await fn(); } catch (e) {
-    if (e instanceof MarketError) return fail(e.message);
+    if (e instanceof MarketError) {
+      if (e.status === 402 && e.data?.needsCard) return needsCard();
+      if (e.status === 402) {
+        return fail(`${e.message}\nThe card on file could not be authorized for this hold. If your owner wants to use a different card, call add_card and give them the link.`);
+      }
+      return fail(e.message);
+    }
     return fail(`Unexpected error: ${(e as Error).message}`);
   }
 }
 
+/** The market refused a hold because this buyer has no card: hand back a fresh setup link for the owner. */
+async function needsCard() {
+  let how: string;
+  try { how = (await cardSetupText()).text; } catch (e) {
+    how = `Could not create a card-setup link (${(e as Error).message}). Call add_card to try again.`;
+  }
+  return fail(`A card is needed: your owner has not saved a card for you yet, so the market cannot place this hold (nothing was held or charged).\n${how}`);
+}
+
+/** The price the market would actually take on a buy (server.mts `buy`). */
+function buyPrice(it: Item): number {
+  if (it.kind !== "unique") return it.ask;
+  if (it.mechanism === "dutch") return it.price ?? it.ask;
+  if (it.mechanism === "offers") return it.ask;
+  return it.price ?? it.ask;
+}
+
 // ---------- server ----------
 const server = new McpServer(
-  { name: "holdback-market", version: "0.1.0" },
+  { name: "holdback-market", version: "0.2.0" },
   {
     instructions:
-      `Holdback is a market where every offer, bid and purchase is a HOLD on your card (a card authorization, in USD). ` +
-      `The amount is reserved on the card but not charged. If the deal clears the hold is CAPTURED (you are charged the deal price, and any excess is released); ` +
-      `if not, it is RELEASED (the authorization is voided and you are never charged). Fixed-price items are charged at once and refundable within their guarantee window. ` +
+      `Holdback is a market where every offer, bid and purchase is a HOLD on your owner's card (a card authorization, in USD). ` +
+      `The amount is reserved on the card but not charged. If the deal clears the hold is CAPTURED (the card is charged the deal price, and any excess is released); ` +
+      `if not, it is RELEASED (the authorization is voided and nothing is charged). Fixed-price items are charged at once and refundable within their guarantee window. ` +
+      `A card is needed before any offer, bid or purchase: if there is none, call add_card and give your owner the link so they can save one in their browser (you never enter card details yourself). ` +
       `You buy on behalf of an owner whose hard spending limit is ${OWNER_MAX} USD: never offer, bid or pay more than that. ` +
       `Start with list_items, then get_item to see how an item is sold and the negotiation so far.`,
   },
@@ -170,14 +254,20 @@ server.registerTool("list_items", {
   title: "List items",
   description:
     "List every item on the Holdback market with its kind (unique / digital / physical), sale mechanism (offers / auction / dutch / buy-now), ask price and status. " +
-    `Start here. Your owner's spending limit is ${OWNER_MAX} USD.`,
+    `Start here. Also says whether your owner has saved a card yet (needed before any offer, bid or purchase). Your owner's spending limit is ${OWNER_MAX} USD.`,
   inputSchema: {},
 }, async () => guard(async () => {
-  await me();
-  const items = await api<Item[]>("GET", "/api/items");
+  const items = await api<Item[]>("GET", "/api/items", undefined, false);
+  let cardNote: string;
+  try {
+    const b = await fresh();
+    cardNote = b.hasCard ? `Paying as ${b.name}${b.card ? ` with ${b.card}` : ""}.` : `${b.name} has no card yet: call add_card before making an offer, bid or purchase.`;
+  } catch (e) {
+    cardNote = `Note: ${(e as Error).message}`;
+  }
   const text = items.map((it) =>
     `- ${it.name} [${it.id}]: ${it.status}, ${it.kind}, ${it.mechanism}, ask ${usd(it.ask)}${it.price !== undefined ? `, price ${usd(it.price)}` : ""}`).join("\n");
-  return result(`${items.length} items on the market (your limit: ${usd(OWNER_MAX)}):\n${text}`,
+  return result(`${items.length} items on the market (your limit: ${usd(OWNER_MAX)}):\n${text}\n${cardNote}`,
     items.map(({ negotiations, holds, ...rest }) => rest));
 }));
 
@@ -188,22 +278,37 @@ server.registerTool("get_item", {
     "Viewing registers you as a watcher — the seller agent may switch the sale mechanism when demand rises (e.g. offers → auction), so re-check before acting.",
   inputSchema: { id: z.string().describe("Item id from list_items") },
 }, async ({ id }) => guard(async () => {
-  const b = await me();
-  const it = await api<Item>("GET", `/api/items/${encodeURIComponent(id)}?buyerId=${encodeURIComponent(b.id)}`);
-  const mine = (it.holds ?? []).filter((h) => h.buyer === b.name || h.buyer === b.id);
+  const b = await fresh();
+  const it = await api<Item>("GET", `/api/items/${encodeURIComponent(id)}`);
+  const mine = (it.holds ?? []).filter((h) => h.buyer === b.name);
   const text = [
     itemSummary(it),
     howToBuy(it),
     lastTurns(it, b.name),
     mine.length ? "Your holds on this item:\n" + mine.map(holdLine).join("\n") : "",
+    b.hasCard ? "" : "You have no card yet: call add_card first (your owner saves the card in a browser).",
   ].filter(Boolean).join("\n");
   return result(text, it);
+}));
+
+server.registerTool("add_card", {
+  title: "Add card",
+  description:
+    "Get a link for your OWNER (the human you buy for) to save a payment card in their browser. Every offer, bid and purchase is a hold on that card, so one is needed before you can buy. " +
+    "Returns a setup URL (valid about 30 minutes): give it to your owner and ask them to open it and save a card, then retry. Saving a card charges nothing; money is only captured when a deal clears. " +
+    "Never ask for or type card numbers yourself. Also use this if your owner wants to replace the current card.",
+  inputSchema: {},
+}, async () => guard(async () => {
+  const b = await fresh();
+  const { text, setup } = await cardSetupText();
+  const current = b.hasCard ? `${b.name} already has a card (${b.card ?? "saved"}); saving another replaces it.` : `${b.name} has no card yet.`;
+  return result(`${current}\n${text}`, setup);
 }));
 
 server.registerTool("make_offer", {
   title: "Make offer",
   description:
-    "Offer a price on a unique item sold by 'offers'. The amount is HELD on your card (authorized, not charged) the moment you offer. " +
+    "Offer a price on a unique item sold by 'offers'. The amount is HELD on your owner's card (authorized, not charged) the moment you offer; needs a saved card (see add_card). " +
     "The seller agent replies at once: ACCEPT (the hold is captured: you are charged and you bought it), COUNTER (your hold stays held; the seller names a price), " +
     "or DECLINE (your hold is released, nothing charged). To counter the seller's counter, call make_offer again with a new amount: the new offer replaces your previous one and the old hold is released. " +
     "To take the seller's counter as-is, use respond_to_counter(id, 'accept'); to quit, respond_to_counter(id, 'walk_away'). " +
@@ -217,8 +322,8 @@ server.registerTool("make_offer", {
 }, async ({ id, amount, message }) => {
   if (amount > OWNER_MAX) return overMax(amount, "offering");
   return guard(async () => {
-    const b = await me();
-    const r = await api<{ hold: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/offer`, { buyerId: b.id, amount, ...(message ? { message } : {}) });
+    await me();
+    const r = await api<{ hold: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/offer`, { amount, ...(message ? { message } : {}) });
     const lines = [sellerSays(r.reply), "", `You offered ${usd(amount)} on ${r.item.name}${message ? ` with the note "${message}"` : ""}.`, holdLine(r.hold)];
     if (r.reply.action === "counter") {
       lines.push(r.reply.amount > OWNER_MAX
@@ -238,7 +343,7 @@ server.registerTool("respond_to_counter", {
   title: "Respond to counter",
   description:
     "Answer the seller's latest reply. 'accept' buys the item at the seller's standing price for you (their last counter, or the ask after a decline): " +
-    "a new hold is placed on your card at that price and captured at once, and your old hold is released. 'walk_away' ends the negotiation and releases your hold (nothing charged). " +
+    "a new hold is placed on your owner's card at that price and captured at once, and your old hold is released. 'walk_away' ends the negotiation and releases your hold (nothing charged). " +
     "(To counter with a different price instead, call make_offer again with the new amount.) " +
     `Will refuse to accept a price above your owner's limit of ${OWNER_MAX} USD. ` +
     "Add an optional `message` (≤280 chars) to tell the seller why, e.g. why you're walking away; the seller replies to it.",
@@ -252,12 +357,12 @@ server.registerTool("respond_to_counter", {
   if (action === "accept") {
     // The market accepts at the seller's standing price for this buyer, which is the amount of the
     // seller's latest turn whatever its action (a counter, or the ask after a decline). Check that.
-    const it = await api<Item>("GET", `/api/items/${encodeURIComponent(id)}`);
+    const it = await api<Item>("GET", `/api/items/${encodeURIComponent(id)}`, undefined, false);
     const turns = it.negotiations?.[b.name] ?? [];
     const latest = [...turns].reverse().find((t) => t.from === "seller");
     if (latest && latest.amount > OWNER_MAX) return overMax(latest.amount, "accepting the seller's price of");
   }
-  const r = await api<{ hold?: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/respond`, { buyerId: b.id, action, ...(message ? { message } : {}) });
+  const r = await api<{ hold?: Hold; reply: Turn; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/respond`, { action, ...(message ? { message } : {}) });
   const lines = [
     `>> Seller: ${r.reply.message}${r.reply.read?.length ? `\n   (the seller read your note as: ${r.reply.read.join(", ")})` : ""}`, "",
     (action === "accept" ? `You accepted the seller's price on ${r.item.name}` : `You walked away from ${r.item.name}`) + (message ? ` with the note "${message}".` : "."),
@@ -273,7 +378,7 @@ server.registerTool("respond_to_counter", {
 server.registerTool("place_bid", {
   title: "Place proxy bid",
   description:
-    "Place a proxy bid on an item sold by 'auction'. Your MAX is HELD on your card (authorized, not charged). If you win you are charged only the 2nd-highest max + 1 (at least the reserve) and the rest of the hold is released; " +
+    "Place a proxy bid on an item sold by 'auction'. Your MAX is HELD on your owner's card (authorized, not charged); needs a saved card (see add_card). If you win you are charged only the 2nd-highest max + 1 (at least the reserve) and the rest of the hold is released; " +
     "if you lose, the whole hold is released when the auction closes. Bids are binding until the auction closes (they cannot be reclaimed). So bid the most you are truly willing to pay: the proxy never exceeds it. " +
     `Your max must not exceed your owner's limit of ${OWNER_MAX} USD.`,
   inputSchema: {
@@ -284,7 +389,7 @@ server.registerTool("place_bid", {
   if (max > OWNER_MAX) return overMax(max, "bidding");
   return guard(async () => {
     const b = await me();
-    const r = await api<{ hold: Hold; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/bid`, { buyerId: b.id, max });
+    const r = await api<{ hold: Hold; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/bid`, { max });
     const a = r.item.auction;
     const lines = [`Proxy bid placed on ${r.item.name} with max ${usd(max)}.`, holdLine(r.hold)];
     if (a) lines.push(`Auction: ${a.bids} bids, leader ${a.leader ?? "none"}${a.leader === b.name ? " (you!)" : ""}, reserve ${a.reserveMet ? "met" : "not met"}, ends ${a.endsAt}.`);
@@ -296,16 +401,16 @@ server.registerTool("place_bid", {
 server.registerTool("buy_now", {
   title: "Buy now",
   description:
-    "Buy an item immediately at its buy-now price, or at the current price of a falling 'dutch' auction. Your card is authorized and charged (captured) in one step. " +
+    "Buy an item immediately at its buy-now price, or at the current price of a falling 'dutch' auction. Your owner's card is authorized and charged (captured) in one step; needs a saved card (see add_card). " +
     "Fixed-price digital / physical items come with a refund guarantee: reclaim(hold_id) within the window gets the full amount back. " +
     `Refuses if the price is above your owner's limit of ${OWNER_MAX} USD (check get_item first; a dutch price keeps falling, so waiting can pay).`,
   inputSchema: { id: z.string().describe("Item id") },
 }, async ({ id }) => guard(async () => {
-  const b = await me();
-  const it = await api<Item>("GET", `/api/items/${encodeURIComponent(id)}`);
-  const price = it.price ?? it.ask;
+  await me();
+  const it = await api<Item>("GET", `/api/items/${encodeURIComponent(id)}`, undefined, false);
+  const price = buyPrice(it);
   if (price > OWNER_MAX) return overMax(price, "buying at");
-  const r = await api<{ hold: Hold; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/buy`, { buyerId: b.id });
+  const r = await api<{ hold: Hold; item: Item }>("POST", `/api/items/${encodeURIComponent(id)}/buy`);
   const lines = [`Bought ${r.item.name}.`, holdLine(r.hold)];
   if (r.hold.refundableUntil) lines.push(`Refund guarantee: reclaim("${r.hold.id}") before ${r.hold.refundableUntil} for your money back, no seller approval needed.`);
   return result(lines.join("\n"), r);
@@ -314,16 +419,16 @@ server.registerTool("buy_now", {
 server.registerTool("my_holds", {
   title: "My holds",
   description:
-    "Show your card's available credit and every hold you have: HELD (authorized, not charged yet), CAPTURED (charged: you bought something), " +
+    "Show the card your owner saved (or that there is none yet) and every hold you have: HELD (authorized, not charged yet), CAPTURED (charged: you bought something), " +
     "RELEASED (authorization voided, never charged), REFUNDED (charged, then the money came back). Each hold carries its processor reference.",
   inputSchema: {},
 }, async () => guard(async () => {
-  const b = await me();
-  const r = await api<Buyer & { holds: Hold[] }>("GET", `/api/buyers/${encodeURIComponent(b.id)}`);
+  const r = await fresh();
   const held = r.holds.filter((h) => h.status === "held").reduce((s, h) => s + h.amount, 0);
+  const limit = r.max !== undefined && r.max !== OWNER_MAX ? `owner limit: ${usd(Math.min(r.max, OWNER_MAX))} (market: ${usd(r.max)}, OWNER_MAX: ${usd(OWNER_MAX)})` : `owner limit: ${usd(OWNER_MAX)}`;
   const lines = [
-    `${r.name}, paying with ${r.card}`,
-    `available credit: ${usd(r.balance)} | currently on hold: ${usd(held)} | owner limit: ${usd(OWNER_MAX)}`,
+    r.hasCard ? `${r.name}, paying with ${r.card ?? "a saved card"}` : `${r.name}: no card yet. Call add_card and give your owner the link to save one.`,
+    `currently on hold: ${usd(held)} | ${limit}`,
     r.holds.length ? r.holds.map(holdLine).join("\n") : "No holds yet.",
   ];
   return result(lines.join("\n"), r);
@@ -337,17 +442,17 @@ server.registerTool("reclaim", {
     "Auction bids cannot be reclaimed: they are binding until the auction closes.",
   inputSchema: { hold_id: z.string().describe("Hold id from my_holds") },
 }, async ({ hold_id }) => guard(async () => {
-  const b = await me();
-  const r = await api<{ hold: Hold }>("POST", `/api/holds/${encodeURIComponent(hold_id)}/reclaim`, { buyerId: b.id });
+  await me();
+  const r = await api<{ hold: Hold }>("POST", `/api/holds/${encodeURIComponent(hold_id)}/reclaim`);
   const what = r.hold.status === "refunded" ? "Refunded to your card" : "Hold released; nothing charged";
   return result(`${what}.\n${holdLine(r.hold)}`, r);
 }));
 
 server.registerPrompt("buy_for_me", {
   title: "Buy for me",
-  description: "Have Claude bargain for an item on the Holdback market within a budget.",
+  description: "Have Claude bargain for an item on the Holdback market within a budget (needs a card saved by the owner).",
   argsSchema: {
-    item: z.string().describe("Item name or id, e.g. 'Monkey #3'"),
+    item: z.string().describe("Item name or id, e.g. 'Blue vase'"),
     budget: z.string().describe(`Most you will pay in USD (capped at the owner limit ${OWNER_MAX})`),
   },
 }, ({ item, budget }) => {
@@ -363,14 +468,15 @@ You may add a short, honest, polite message to your offers (e.g. that you're on 
 
 How to do it:
 1. list_items, find the item, then get_item to see how it is sold (the mechanism can change as other buyers watch).
-2. If it is sold by OFFERS: open at about 60–65% of the ask. The seller counters with shrinking concessions, so raise in modest steps (roughly halfway between your last offer and their counter, but never above ${cap}). Accept with respond_to_counter once the counter is at or below what you would pay next, or after ~4 rounds if it is within budget. If the seller will not come within budget, walk_away (your hold is released).
-3. If it is an AUCTION: place_bid once with max = ${cap}. You only pay the 2nd-highest max + 1.
-4. If it is DUTCH: watch with get_item and buy_now once the price is comfortably within budget; if it is BUY-NOW, buy only if price ≤ ${cap}.
-5. Every offer/bid is a hold on my card: authorized, not charged, and released if the deal does not clear. Narrate each step briefly (price, what is held/charged/released, the seller's reply), and finish with my_holds to show the final state.`,
+2. You need a card on file before any offer, bid or purchase. If list_items says there is no card, or a tool answers that a card is needed, call add_card, give me the link, and wait until I tell you I've saved a card. Never ask me for card numbers in chat.
+3. If it is sold by OFFERS: open at about 60–65% of the ask. The seller counters with shrinking concessions, so raise in modest steps (roughly halfway between your last offer and their counter, but never above ${cap}). Accept with respond_to_counter once the counter is at or below what you would pay next, or after ~4 rounds if it is within budget. If the seller will not come within budget, walk_away (your hold is released).
+4. If it is an AUCTION: place_bid once with max = ${cap}. You only pay the 2nd-highest max + 1.
+5. If it is DUTCH: watch with get_item and buy_now once the price is comfortably within budget; if it is BUY-NOW, buy only if price ≤ ${cap}.
+6. Every offer/bid is a hold on my card: authorized, not charged, and released if the deal does not clear. Narrate each step briefly (price, what is held/charged/released, the seller's reply), and finish with my_holds to show the final state.`,
       },
     }],
   };
 });
 
 await server.connect(new StdioServerTransport());
-console.error(`[holdback-market] MCP server ready — market ${MARKET_URL}, buyer "${BUYER_NAME}", owner max ${OWNER_MAX}`);
+console.error(`[holdback-market] MCP server ready — market ${MARKET_URL}, ${ENV_TOKEN ? "buyer from HOLDBACK_TOKEN" : `buyer "${BUYER_NAME}" (registered on first use)`}, owner max ${OWNER_MAX}`);

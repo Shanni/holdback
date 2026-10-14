@@ -1,3 +1,5 @@
+.env
+/data/
 .DS_Store
 node_modules
 .keys
@@ -9,3 +11,4 @@ demo/public/store/extension/assets/holdback.js
 /target/
 /.anchor/
 /test-ledger/
+.playwright-mcp/

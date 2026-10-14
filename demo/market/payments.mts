@@ -1,23 +1,20 @@
-// Payment layer for the Holdback market: card-style authorize / capture / void / refund.
+// Payment layer for the Holdback market: card authorize / capture / void / refund.
 //
-// The market server only talks to a HoldProvider. FakeCardProvider is an in-memory
-// processor with the same rules a card processor enforces (an authorization reserves
-// the buyer's available credit, captures can be partial but never exceed the
-// authorization, authorizations expire, refunds only follow a capture), so the demo and
-// tests run offline. A StripeProvider (PaymentIntents, capture_method: manual) replaces
-// it without touching the server. See docs/v2-plan.md.
+// The market server only talks to a HoldProvider. StripeProvider implements it with
+// PaymentIntents (capture_method: manual): an authorization reserves the amount on the
+// buyer's card, a capture can take less than was authorized (the rest is released),
+// cancel voids it, and refunds follow a capture. Amounts are USD; Stripe gets cents.
+import Stripe from "stripe";
 
-export type AuthStatus = "authorized" | "captured" | "voided" | "refunded" | "expired";
+export type AuthStatus = "authorized" | "captured" | "voided" | "refunded" | "expired" | "failed";
 
 export type Authorization = {
   id: string;
-  account: string;
   amount: number;
   captured: number;
   refunded: number;
   status: AuthStatus;
-  createdAt: number;
-  expiresAt: number;
+  expiresAt?: number;   // ms; card authorizations must be captured before this
 };
 
 export type ProviderCapabilities = {
@@ -27,14 +24,21 @@ export type ProviderCapabilities = {
   incrementalAuth: boolean;
 };
 
+export type SavedCard = { paymentMethod: string; label: string };
+
 export interface HoldProvider {
   readonly id: string;
   readonly name: string;
+  readonly mode: "test" | "live";
+  readonly publishableKey: string;
   readonly capabilities: ProviderCapabilities;
-  /** A demo payment method with `limit` available. Real providers attach the buyer's own card. */
-  createAccount(holder: string, limit: number): Promise<{ id: string; label: string }>;
-  available(account: string): Promise<number>;
-  authorize(account: string, amount: number, idempotencyKey?: string): Promise<Authorization>;
+  createCustomer(name: string, metadata: Record<string, string>): Promise<string>;
+  /** Starts saving a card for later holds; the browser confirms it with the client secret. */
+  startCardSetup(customer: string): Promise<{ setupIntent: string; clientSecret: string }>;
+  finishCardSetup(customer: string, setupIntent: string): Promise<SavedCard>;
+  /** Test mode only: attach one of Stripe's test cards (default pm_card_visa) without a browser. */
+  attachTestCard(customer: string, testCard?: string): Promise<SavedCard>;
+  authorize(req: { customer: string; paymentMethod: string; amount: number; idempotencyKey: string; description: string; metadata: Record<string, string> }): Promise<Authorization>;
   /** Takes `amount` (≤ authorized); the rest of the authorization is released. */
   capture(authId: string, amount: number): Promise<Authorization>;
   /** Releases an uncaptured authorization in full. */
@@ -44,111 +48,112 @@ export interface HoldProvider {
   get(authId: string): Promise<Authorization>;
 }
 
+/** A payment problem to show the buyer (declined card, authentication needed, ...). */
 export class PaymentError extends Error {}
 
-const CARD_AUTH_SECS = 7 * 86400; // card-not-present authorizations typically last about 7 days
+const cents = (usd: number) => Math.round(usd * 100);
+const usd = (c: number) => c / 100;
+const CARD_AUTH_SECS = 7 * 86400;
 
-export class FakeCardProvider implements HoldProvider {
-  readonly id = "fake-card";
-  readonly name = "Demo cards (in-memory)";
+export class StripeProvider implements HoldProvider {
+  readonly id = "stripe";
+  readonly name: string;
+  readonly mode: "test" | "live";
   readonly capabilities: ProviderCapabilities = { maxHoldSecs: CARD_AUTH_SECS, partialCapture: true, multiCapture: false, incrementalAuth: false };
-  /** Money the merchant has captured, net of refunds. */
-  merchantBalance = 0;
-  private accounts = new Map<string, { holder: string; available: number; label: string }>();
-  private auths = new Map<string, Authorization>();
-  private byKey = new Map<string, string>();
-  private seq = 1;
-  private clock: () => number;
+  readonly publishableKey: string;
+  private stripe: Stripe;
 
-  constructor(opts: { now?: () => number } = {}) {
-    this.clock = opts.now ?? Date.now;
+  constructor(secretKey: string, publishableKey: string) {
+    this.publishableKey = publishableKey;
+    this.mode = secretKey.startsWith("sk_live_") ? "live" : "test";
+    this.name = this.mode === "live" ? "Stripe" : "Stripe (test mode)";
+    this.stripe = new Stripe(secretKey, { appInfo: { name: "holdback" } });
   }
 
-  async createAccount(holder: string, limit: number) {
-    const id = `pm_${this.seq++}`;
-    const label = `Demo card •••• ${String(4000 + ((this.seq * 7919) % 6000)).slice(-4)}`;
-    this.accounts.set(id, { holder, available: limit, label });
-    return { id, label };
+  async createCustomer(name: string, metadata: Record<string, string>) {
+    return (await this.call(() => this.stripe.customers.create({ name, metadata }))).id;
   }
 
-  async available(account: string) {
-    return this.account(account).available;
+  async startCardSetup(customer: string) {
+    const si = await this.call(() => this.stripe.setupIntents.create({ customer, usage: "off_session", payment_method_types: ["card"] }));
+    return { setupIntent: si.id, clientSecret: si.client_secret! };
   }
 
-  async authorize(account: string, amount: number, idempotencyKey?: string) {
-    if (idempotencyKey && this.byKey.has(idempotencyKey)) return this.auth(this.byKey.get(idempotencyKey)!);
-    if (!(amount > 0)) throw new PaymentError("amount must be positive");
-    const a = this.account(account);
-    if (a.available < amount) throw new PaymentError(`card declined: ${a.available} USD available, ${amount} needed`);
-    a.available -= amount;
-    const now = this.clock();
-    const auth: Authorization = {
-      id: `auth_${this.seq++}`, account, amount, captured: 0, refunded: 0, status: "authorized",
-      createdAt: now, expiresAt: now + CARD_AUTH_SECS * 1000,
-    };
-    this.auths.set(auth.id, auth);
-    if (idempotencyKey) this.byKey.set(idempotencyKey, auth.id);
-    return { ...auth };
+  async finishCardSetup(customer: string, setupIntent: string) {
+    const si = await this.call(() => this.stripe.setupIntents.retrieve(setupIntent, { expand: ["payment_method"] }));
+    if (si.customer !== customer) throw new PaymentError("that card setup belongs to someone else");
+    if (si.status !== "succeeded") throw new PaymentError(`card setup is ${si.status.replace(/_/g, " ")}`);
+    return this.saved(si.payment_method as Stripe.PaymentMethod);
+  }
+
+  async attachTestCard(customer: string, testCard = "pm_card_visa") {
+    if (this.mode !== "test") throw new PaymentError("test cards only work with a test-mode key");
+    return this.saved(await this.call(() => this.stripe.paymentMethods.attach(testCard, { customer })));
+  }
+
+  async authorize(req: { customer: string; paymentMethod: string; amount: number; idempotencyKey: string; description: string; metadata: Record<string, string> }) {
+    const pi = await this.call(() => this.stripe.paymentIntents.create({
+      amount: cents(req.amount), currency: "usd", customer: req.customer, payment_method: req.paymentMethod,
+      capture_method: "manual", confirm: true, off_session: true,
+      description: req.description, metadata: req.metadata, expand: ["latest_charge"],
+    }, { idempotencyKey: req.idempotencyKey }));
+    if (pi.status !== "requires_capture") {
+      if (pi.status !== "canceled") await this.stripe.paymentIntents.cancel(pi.id).catch(() => {});
+      throw new PaymentError(pi.status === "requires_action" ? "the card needs the owner to authenticate this payment" : `card authorization ${pi.status.replace(/_/g, " ")}`);
+    }
+    return this.toAuth(pi);
   }
 
   async capture(authId: string, amount: number) {
-    const auth = this.live(authId);
-    if (!(amount > 0) || amount > auth.amount) throw new PaymentError(`capture must be between 0 and ${auth.amount}`);
-    auth.captured = amount;
-    auth.status = "captured";
-    this.account(auth.account).available += auth.amount - amount;
-    this.merchantBalance += amount;
-    return { ...auth };
+    return this.toAuth(await this.call(() => this.stripe.paymentIntents.capture(authId, { amount_to_capture: cents(amount), expand: ["latest_charge"] })));
   }
 
   async void(authId: string) {
-    const auth = this.live(authId);
-    auth.status = "voided";
-    this.account(auth.account).available += auth.amount;
-    return { ...auth };
+    return this.toAuth(await this.call(() => this.stripe.paymentIntents.cancel(authId, { expand: ["latest_charge"] })));
   }
 
   async refund(authId: string, amount?: number) {
-    const auth = this.auth(authId);
-    if (auth.status !== "captured") throw new PaymentError(`only a captured payment can be refunded (this one is ${auth.status})`);
-    const left = auth.captured - auth.refunded;
-    const n = amount ?? left;
-    if (!(n > 0) || n > left) throw new PaymentError(`refund must be between 0 and ${left}`);
-    auth.refunded += n;
-    if (auth.refunded === auth.captured) auth.status = "refunded";
-    this.account(auth.account).available += n;
-    this.merchantBalance -= n;
-    return { ...auth };
+    await this.call(() => this.stripe.refunds.create({ payment_intent: authId, ...(amount === undefined ? {} : { amount: cents(amount) }) }));
+    return this.get(authId);
   }
 
   async get(authId: string) {
-    return { ...this.expireIfDue(this.auth(authId)) };
+    return this.toAuth(await this.call(() => this.stripe.paymentIntents.retrieve(authId, { expand: ["latest_charge"] })));
   }
 
-  private account(id: string) {
-    const a = this.accounts.get(id);
-    if (!a) throw new PaymentError(`unknown payment method ${id}`);
-    return a;
+  private saved(pm: Stripe.PaymentMethod): SavedCard {
+    const c = pm.card;
+    const brand = c?.brand ? c.brand[0].toUpperCase() + c.brand.slice(1) : "Card";
+    return { paymentMethod: pm.id, label: c ? `${brand} •••• ${c.last4}` : brand };
   }
 
-  private auth(id: string) {
-    const a = this.auths.get(id);
-    if (!a) throw new PaymentError(`unknown authorization ${id}`);
-    return a;
+  private toAuth(pi: Stripe.PaymentIntent): Authorization {
+    const charge = typeof pi.latest_charge === "object" ? pi.latest_charge : null;
+    const captured = usd(pi.amount_received ?? 0);
+    const refunded = usd(charge?.amount_refunded ?? 0);
+    const status: AuthStatus =
+      pi.status === "requires_capture" ? "authorized"
+      : pi.status === "succeeded" ? (refunded > 0 && refunded >= captured ? "refunded" : "captured")
+      : pi.status === "canceled" ? (pi.cancellation_reason === "automatic" || pi.cancellation_reason === "expired" ? "expired" : "voided")
+      : "failed";
+    const before = charge?.payment_method_details?.card?.capture_before;
+    return { id: pi.id, amount: usd(pi.amount), captured, refunded, status, expiresAt: before ? before * 1000 : undefined };
   }
 
-  /** An authorization that is still open: not captured, voided or expired. */
-  private live(id: string) {
-    const a = this.expireIfDue(this.auth(id));
-    if (a.status !== "authorized") throw new PaymentError(`authorization ${id} is ${a.status}`);
-    return a;
-  }
-
-  private expireIfDue(a: Authorization) {
-    if (a.status === "authorized" && this.clock() >= a.expiresAt) {
-      a.status = "expired";
-      this.account(a.account).available += a.amount;
+  /** Stripe card and request errors become PaymentErrors with Stripe's own message. */
+  private async call<T>(fn: () => Promise<T>): Promise<T> {
+    try { return await fn(); } catch (e: any) {
+      if (e instanceof Stripe.errors.StripeCardError || e instanceof Stripe.errors.StripeInvalidRequestError) throw new PaymentError(e.message);
+      throw e;
     }
-    return a;
   }
+}
+
+/** The provider configured in the environment (.env). Refuses live keys unless ALLOW_LIVE=1. */
+export function paymentsFromEnv(env = process.env): HoldProvider {
+  const sk = env.STRIPE_SECRET_KEY, pk = env.STRIPE_PUBLISHABLE_KEY;
+  if (!sk || !pk) throw new Error("Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY (test-mode keys from dashboard.stripe.com/test/apikeys) in .env");
+  if (sk.startsWith("sk_live_") && env.ALLOW_LIVE !== "1") throw new Error("Refusing a live Stripe key: set ALLOW_LIVE=1 once you mean to take real payments");
+  if (sk.startsWith("sk_live_") !== pk.startsWith("pk_live_")) throw new Error("STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY are from different modes");
+  return new StripeProvider(sk, pk);
 }

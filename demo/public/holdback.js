@@ -1,15 +1,17 @@
 /* Holdback widget: held offers, bids and guaranteed purchases on any product page. No deps.
  *
  *   <script src="https://YOUR-MARKET/holdback.js" defer></script>
- *   <div data-holdback-item="monkey-3"></div>
+ *   <div data-holdback-item="YOUR-PRODUCT-ID"></div>
  *
  * Every offer, bid and purchase is a hold on the shopper's card (an authorization): captured when the deal
  * clears, released otherwise. Guaranteed purchases are charged at once and refundable inside the window.
+ * On the first offer, bid or purchase the shopper picks a display name and saves a card once (the market's
+ * /card/ page opens in a popup); the buyer token is kept in localStorage and sent as a Bearer header.
  *
  * Options, on the script tag or on a mount element (mount wins):
  *   data-market / data-holdback-market   market server URL (default: where holdback.js was loaded from)
  *   data-theme                           "light" (default) | "dark" | "auto"
- *   data-buyer-name                      name shown to the seller (default: "Shopper XXXX")
+ *   data-buyer-name                      suggested display name; the shopper can change it (default: "Shopper XXXX")
  * Theme from the host page's CSS: --holdback-accent, --holdback-on-accent, --holdback-radius, --holdback-font.
  * Events (bubble out of the mount, detail = { item, hold }): holdback:hold, holdback:purchase, holdback:release, holdback:refund.
  * JS: Holdback.mount(el, itemId), Holdback.open(itemId), Holdback.market, Holdback.onChange(fn).
@@ -25,7 +27,8 @@
     (script && script.src ? new URL(script.src, location.href).origin : location.origin),
   ).replace(/\/+$/, "");
   const THEME = (script && script.dataset.theme) || "light";
-  const LS_BUYER = `holdback.buyer@${MARKET}`;
+  const LS_BUYER = `holdback.buyer@${MARKET}`;   // { id, token, name }
+  const DEFAULT_NAME = `Shopper ${Math.random().toString(16).slice(2, 6).toUpperCase()}`;
 
   // ------------------------------------------------------------------ helpers
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -41,20 +44,15 @@
   const fmtDate = (iso) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""; };
   const chip = (st) => `<span class="chip ${esc(st)}">${esc(st)}</span>`;
 
-  function monkey(hue) {
-    hue = Number(hue) || 0;
-    const f = `hsl(${hue} 45% 42%)`, face = `hsl(${hue} 55% 78%)`, bg = `hsl(${(hue + 160) % 360} 60% 88%)`;
-    return `<svg viewBox="0 0 120 120" role="img" aria-label="artwork"><rect width="120" height="120" fill="${bg}"/>
-      <circle cx="28" cy="58" r="15" fill="${f}"/><circle cx="92" cy="58" r="15" fill="${f}"/>
-      <circle cx="28" cy="58" r="8" fill="${face}"/><circle cx="92" cy="58" r="8" fill="${face}"/>
-      <circle cx="60" cy="60" r="36" fill="${f}"/><ellipse cx="60" cy="70" rx="24" ry="20" fill="${face}"/>
-      <ellipse cx="48" cy="52" rx="9" ry="10" fill="${face}"/><ellipse cx="72" cy="52" rx="9" ry="10" fill="${face}"/>
-      <circle cx="49" cy="54" r="4" fill="#1d1b16"/><circle cx="71" cy="54" r="4" fill="#1d1b16"/>
-      <ellipse cx="60" cy="68" rx="5" ry="3" fill="#1d1b16" opacity=".7"/>
-      <path d="M50 78 Q60 86 70 78" stroke="#1d1b16" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
+  // products without an image: a soft gradient from the item's hue with its initial
+  const initial = (s) => (String(s || "").trim().match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase();
+  function placeholder(it) {
+    const h = Number(it.hue) || 0;
+    return `<svg viewBox="0 0 100 100" role="img" aria-label="${esc(it.name)}" style="background:linear-gradient(135deg,hsl(${h} 70% 90%),hsl(${(h + 40) % 360} 55% 76%))">
+      <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="42" font-weight="600" font-family="system-ui, sans-serif" fill="hsl(${h} 35% 30%)">${esc(initial(it.name))}</text></svg>`;
   }
   const imgUrl = (src) => { try { return new URL(src, MARKET + "/").href; } catch { return src; } };
-  const art = (it) => it.image ? `<img src="${esc(imgUrl(it.image))}" alt="">` : monkey(it.hue);
+  const art = (it) => it.image ? `<img src="${esc(imgUrl(it.image))}" alt="">` : placeholder(it);
   const shipped = (it) => it.kind === "physical";
   const LOCK = `<svg class="lock" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>`;
 
@@ -166,62 +164,153 @@
   .empty { color: var(--muted); font-size: 13px; padding: 12px; }
   .ft { border-top: 1px solid var(--line); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
   .ft .card b { color: var(--ink); font-size: 14px; }
+  .desc { font-size: 13px; color: var(--ink-2); margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+  .gate { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); font-size: 13px; color: var(--ink-2); }
+  .gate:empty { display: none; }
+  .gate.need { border-color: var(--held); background: var(--held-bg); }
+  .gate b { color: var(--ink); }
+  .gate .row { flex-wrap: wrap; }
   .ft .by { display: inline-flex; gap: 6px; align-items: center; }
   `;
 
   // ------------------------------------------------------------------ state
   let S = null;                      // market snapshot
-  let me = null;                     // Buyer
+  let me = null;                     // Me (GET /api/me): { id, name, kind, hasCard, card?, holds }
+  let token = null;                  // buyer token, sent as Authorization: Bearer
+  const myIds = new Set();           // this buyer's hold ids (display names aren't unique, so holds are matched by id)
   const mounts = new Map();          // element -> { itemId, root }
   const listeners = new Set();
   const notes = {};                  // itemId -> last action result (html)
   let lastErr = "";
   let prevMine = new Map();          // holdId -> status, to fire events on change
+  // "Add a card" step. state: "" | "need" (an action is waiting for a card) | "waiting" (card page open)
+  let card = { state: "", url: "", pending: null };
 
   const items = () => (S && S.items) || [];
   const itemById = (id) => items().find((i) => i.id === id);
-  const isMine = (h) => !!me && (h.buyer === me.name || h.buyer === me.id);
+  const isMine = (h) => !!me && myIds.has(h.id);
   const myHolds = () => { const out = []; for (const it of items()) for (const h of it.holds || []) if (isMine(h)) out.push([it, h]); return out; };
-  const myTurns = (it) => (me && it && it.negotiations && (it.negotiations[me.name] || it.negotiations[me.id])) || [];
+  const myTurns = (it) => (me && it && it.negotiations && it.negotiations[me.name]) || [];
   const myBuyer = () => me && S && (S.buyers || []).find((x) => x.id === me.id);
-  const myBalance = () => { const b = myBuyer(); return b ? b.balance : me && me.balance; };
-  const myCard = () => { const b = myBuyer(); return (b && b.card) || (me && me.card) || ""; };
-  const boughtByMe = (it) => it.status === "sold" && me && (it.soldTo === me.name || it.soldTo === me.id);
+  const boughtByMe = (it) => it.status === "sold" && (it.holds || []).some((h) => isMine(h) && h.status === "captured");
+  const nameSuggestion = () => { const c = loadCreds(); return (c && c.name) || (script && script.dataset.buyerName) || (firstMount && firstMount.dataset.buyerName) || ""; };
 
   // ------------------------------------------------------------------ API
   async function api(method, path, body) {
-    const r = await fetch(MARKET + path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    const headers = {};
+    if (body) headers["content-type"] = "application/json";
+    if (token) headers.authorization = `Bearer ${token}`;
+    const r = await fetch(MARKET + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
     let data = null; try { data = await r.json(); } catch {}
-    if (!r.ok) { const e = new Error((data && data.error) || `${r.status} ${r.statusText}`); e.status = r.status; throw e; }
+    if (!r.ok) { const e = new Error((data && data.error) || `${r.status} ${r.statusText}`); e.status = r.status; e.needsCard = !!(data && data.needsCard); throw e; }
     return data;
   }
+
+  // ------------------------------------------------------------------ buyer: token, name, card
+  function loadCreds() { try { const c = JSON.parse(lsGet(LS_BUYER) || "null"); return c && c.id && c.token ? c : null; } catch { return null; } }
+  function setMe(m) { me = m; if (m) for (const h of m.holds || []) myIds.add(h.id); }
+  function forget() { token = null; me = null; myIds.clear(); seeded = false; }
   let creating = null;
-  function ensureBuyer(force) {
+  /** A new buyer (a new card customer, no card yet). The token comes back once; it is kept in localStorage. */
+  function register(name) {
     if (creating) return creating;
     creating = (async () => {
-      const id = force ? null : lsGet(LS_BUYER);
-      if (id) {
-        try { me = await api("GET", `/api/buyers/${encodeURIComponent(id)}`); if (me && me.id) return me; }
-        catch (e) { if (!e.status || e.status >= 500) throw e; }
-      }
-      const name = (script && script.dataset.buyerName) || `Shopper ${Math.random().toString(16).slice(2, 6).toUpperCase()}`;
-      me = await api("POST", "/api/buyers", { name, kind: "human" });
-      lsSet(LS_BUYER, me.id);
+      token = null;
+      let r;
+      try { r = await api("POST", "/api/buyers", { name: String(name || DEFAULT_NAME).trim().slice(0, 40) || DEFAULT_NAME, kind: "human" }); }
+      catch (e) { e.message = `Couldn't set you up as a buyer: ${e.message}`; throw e; }
+      const { token: t, ...m } = r;
+      token = t; myIds.clear(); setMe(m);
+      lsSet(LS_BUYER, JSON.stringify({ id: m.id, token: t, name: m.name }));
       return me;
     })().finally(() => { creating = null; });
     return creating;
   }
-  async function act(itemId, fn) {
+  /** The buyer saved in this browser, if any. If the server no longer knows the token (401), register again under the same name. */
+  async function restore() {
+    const c = loadCreds();
+    if (!c) return null;
+    token = c.token;
+    try { setMe(await api("GET", "/api/me")); return me; }
+    catch (e) { if (e.status !== 401) throw e; forget(); return register(c.name); }
+  }
+  async function refreshMe() {
+    if (!token) return me;
+    try { setMe(await api("GET", "/api/me")); }
+    catch (e) { if (e.status === 401) { const name = me && me.name; forget(); await register(name); } else throw e; }
+    return me;
+  }
+  async function ensureBuyer(name) {
+    if (me) return me;
+    if (await restore()) return me;
+    return register(name);
+  }
+  // name typed in the drawer's "Your name" field, else the suggestion, else "Shopper XXXX"
+  const chosenName = () => { const el = drawer && drawer.root.getElementById("who"); return (el && el.value.trim()) || nameSuggestion() || DEFAULT_NAME; };
+
+  /** Popup for the card page. Opened synchronously inside the click (popup blockers allow only that), pointed at the page once it's known. */
+  function cardWindow() { try { return window.open("", "holdback-card", "popup,width=480,height=760"); } catch { return null; } }
+  async function startCard(win) {
     lastErr = "";
     try {
-      if (!me) await ensureBuyer();
-      try { return await fn(); }
-      catch (e) {
-        if (/unknown buyer|buyer not found|no such buyer|no buyer/i.test(e.message)) { await ensureBuyer(true); return await fn(); }
-        throw e;
+      await ensureBuyer(chosenName());
+      if (me.hasCard) { if (win) win.close(); cardAdded(); return; }
+      const s = await api("POST", "/api/me/card-setup");
+      card.state = "waiting"; card.url = s.setupUrl;
+      if (win && !win.closed) win.location.href = s.setupUrl;
+      else window.open(s.setupUrl, "holdback-card");   // blocked? the step below also links to the page
+      pollCard();
+    } catch (e) {
+      if (win) win.close();
+      if (!me) card.pending = null;   // no buyer yet (registration failed): back to the name prompt
+      card.state = card.pending ? "need" : "";
+      lastErr = e.message;
+    }
+    renderAll();
+  }
+  let pollT = null;
+  function pollCard() {
+    clearInterval(pollT);
+    const until = Date.now() + 30 * 60e3;   // the card link is valid for 30 minutes
+    pollT = setInterval(() => {
+      if (card.state !== "waiting" || Date.now() > until) { clearInterval(pollT); return; }
+      checkCard();
+    }, 2000);
+  }
+  async function checkCard() {
+    try { await refreshMe(); } catch { return; }
+    if (me && me.hasCard) cardAdded(); else renderAll();
+  }
+  function stopCard() { clearInterval(pollT); card = { state: "", url: "", pending: null }; }
+  function cardAdded() {
+    const next = card.pending;
+    stopCard();
+    renderAll();
+    if (next) next();   // continue the offer, bid or purchase that was waiting for the card
+  }
+  // the card page tells its opener when the card is saved; polling GET /api/me covers a closed opener
+  window.addEventListener("message", (e) => {
+    if (!e.data || e.data.type !== "holdback:card" || e.origin !== new URL(MARKET).origin) return;
+    if (card.state || (me && !me.hasCard)) checkCard();
+  });
+
+  /** One buyer action: registers if needed, sends it with the token; a 402 needsCard parks it behind the card step. */
+  async function run(itemId, req, retried) {
+    lastErr = "";
+    try {
+      await ensureBuyer(chosenName());
+      const r = await api("POST", req.path, req.body);
+      if (r && r.hold) myIds.add(r.hold.id);
+      if (itemId && req.done) notes[itemId] = req.done(r) || "";
+    } catch (e) {
+      if (e.status === 401 && !retried) {   // token no longer known: register again under the same name, then retry once
+        const name = me && me.name; forget();
+        try { await register(name || chosenName()); } catch (e2) { lastErr = e2.message; return; }
+        return run(itemId, req, true);
       }
-    } catch (e) { lastErr = e.message; }
-    finally { renderAll(); }
+      if (e.needsCard) { card.state = card.state === "waiting" ? "waiting" : "need"; card.pending = () => run(itemId, req); }
+      else lastErr = e.message;
+    } finally { fireEvents(); renderAll(); }
   }
 
   // ------------------------------------------------------------------ inline block
@@ -323,7 +412,7 @@
     d.host.setAttribute("open", "");
     renderDrawer();
     requestAnimationFrame(() => d.root.querySelector(".sheet").focus());
-    ensureBuyer().then(() => fetch(`${MARKET}/api/items/${encodeURIComponent(itemId)}?buyerId=${encodeURIComponent(me.id)}`)).catch(() => {}); // registers as a watcher
+    if (me && token) api("GET", `/api/items/${encodeURIComponent(itemId)}`).catch(() => {}); // with the token, registers this buyer as a watcher
   }
   function close() {
     if (!drawer || !drawer.host.hasAttribute("open")) return;
@@ -362,8 +451,8 @@
           <div class="thread" id="thread"></div>
           <div id="counter"></div>
           <div><label class="lbl" for="msg">Message to the seller <span class="muted">(optional)</span></label>
-            <input id="msg" type="text" maxlength="280" autocomplete="off" placeholder="Explain your offer or ask about the piece"></div>
-          <div class="qchips"><button class="qchip" data-fill="I'm a student — any flexibility?">I'm a student — any flexibility?</button><button class="qchip" data-fill="Huge fan of this series!">Huge fan of this series!</button><button class="qchip" data-fill="Is it one of a kind?">Is it one of a kind?</button></div>
+            <input id="msg" type="text" maxlength="280" autocomplete="off" placeholder="Explain your offer or ask about the product"></div>
+          <div class="qchips"><button class="qchip" data-fill="I'm a student — any flexibility?">I'm a student — any flexibility?</button><button class="qchip" data-fill="Big fan, I love this one!">Big fan, I love this one!</button><button class="qchip" data-fill="Is it one of a kind?">Is it one of a kind?</button></div>
           <div class="row"><input id="amt" type="number" min="1" step="1" inputmode="numeric" placeholder="Your offer (ask ${fmt(it.ask)})" aria-label="Offer amount"><button class="btn" data-act="offer">Make offer</button></div>
           <div class="hint">Your offer is a hold on your card, not a charge, while the seller agent decides. A new offer replaces the old one, and the old hold is released.</div>
           <button class="btn ghost block" data-act="buy">Or buy at ask · ${fmt(it.ask)} USD</button></div>`;
@@ -384,6 +473,8 @@
       d.root.getElementById("bd").innerHTML = `
         ${it.reason ? `<div class="why"><b>${esc(WHY[it.mechanism] || "Why this way of selling?")} · the seller agent says</b><span id="reason"></span></div>` : ""}
         <div class="pricebox" id="price"></div>
+        ${it.description ? `<p class="desc" id="desc"></p>` : ""}
+        <div class="gate" id="gate"></div>
         <div id="form">${formHTML(it)}</div>
         <div class="note" id="note" aria-live="polite"></div><div class="err" id="err" role="alert"></div>
         <div id="flow"></div>`;
@@ -411,9 +502,26 @@
       set("buybox", `<button class="btn block" data-act="buy">Buy now · ${fmt(p)} USD</button>
         <div class="hint">${shipped(it) ? `Your card is charged now. If it doesn't arrive or isn't as described, refund it yourself from “Your holds” within ${esc(it.guarantee)}, no seller approval needed.` : it.guarantee ? `Your card is charged now. Not happy? Refund it yourself from “Your holds” within ${esc(it.guarantee)}, no seller approval needed.` : it.mechanism === "dutch" ? "The price falls on a schedule. Buying charges the current price at once." : "Buying charges your card at once."}</div>`);
     }
+    set("desc", esc(it.description));
+    if (set("gate", gateHTML(it))) $("gate").classList.toggle("need", card.state === "need");
     set("note", notes[it.id] || "");
     set("err", esc(lastErr));
     set("flow", flowHTML(it));
+  }
+
+  // who is buying and with which card: a name on first use, then "Add a card" before the first hold
+  function gateHTML(it) {
+    if (card.state === "waiting") return `<span><b>Waiting for your card…</b> Finish in the card window. ${card.pending ? "Your request goes through as soon as the card is saved." : "This updates on its own once it's saved."}</span>
+      <div class="row"><a class="btn ghost small" href="${esc(card.url)}" target="holdback-card">Open the card page</a><button class="btn ghost small" data-card-cancel>Cancel</button></div>`;
+    if (card.state === "need") return `<span><b>Add a card to continue.</b> Offers, bids and purchases are holds on a card you save once. Nothing is charged until a deal clears.</span>
+      <button class="btn block" data-card>Add a card</button>`;
+    if (it.status !== "listed") return "";
+    if (!me) return loadCreds() ? "" : `<div><label class="lbl" for="who">Your name <span class="muted">(shown to the seller)</span></label>
+      <input id="who" type="text" maxlength="40" autocomplete="nickname" placeholder="${esc(DEFAULT_NAME)}" value="${esc(nameSuggestion())}"></div>
+      <span class="hint">You'll save a card on your first offer, bid or purchase. Nothing is charged until a deal clears.</span>`;
+    if (!me.hasCard) return `<span><b>${esc(me.name)}</b> · no card yet. You'll add one on your first offer, bid or purchase.</span>
+      <div class="row"><button class="btn ghost small" data-card>Add a card now</button></div>`;
+    return "";
   }
 
   function holdsTab() {
@@ -442,7 +550,7 @@
       if (b.dataset.tab === "holds") b.textContent = n ? `Your holds (${n} open)` : "Your holds";
     }
     if (d.tab === "holds") holdsTab(); else if (it) { d.cache.delete("holds"); itemTab(it); }
-    $("card").innerHTML = me ? `${esc(me.name)}${myCard() ? ` · ${esc(myCard())}` : ""} · <b>${fmt(myBalance())}</b> USD available` : "Setting up your card…";
+    $("card").innerHTML = me ? `${esc(me.name)} · ${me.card ? `<b>${esc(me.card)}</b>` : "no card yet"}` : "Pay with a hold on your card";
     tick();
   }
 
@@ -450,44 +558,61 @@
     const d = drawer, $ = (id) => d.root.getElementById(id);
     const fill = e.target.closest("[data-fill]");
     if (fill) { $("msg").value = fill.dataset.fill; $("msg").focus(); return; }
+    if (e.target.closest("[data-card]")) { startCard(cardWindow()); return; }
+    if (e.target.closest("[data-card-cancel]")) { stopCard(); renderAll(); return; }
     const rc = e.target.closest("[data-reclaim]");
-    if (rc) { rc.disabled = true; await act(null, () => api("POST", `/api/holds/${encodeURIComponent(rc.dataset.reclaim)}/reclaim`, { buyerId: me.id })); return; }
+    if (rc) { rc.disabled = true; await run(null, { path: `/api/holds/${encodeURIComponent(rc.dataset.reclaim)}/reclaim` }); return; }
     const b = e.target.closest("[data-act]");
     if (!b || b.disabled) return;
     const it = itemById(d.itemId); if (!it) return;
-    const path = `/api/items/${encodeURIComponent(it.id)}`;
-    const msg = () => { const m = $("msg") && $("msg").value.trim().slice(0, 280); return m ? { message: m } : {}; };
-    const clearMsg = () => { if ($("msg")) $("msg").value = ""; };
-    const amount = () => { const v = Math.round(Number($("amt") && $("amt").value)); if (!v || v <= 0) throw new Error("Enter an amount."); return v; };
+    let req;
+    try { req = request(b.dataset.act, it); } catch (err) { lastErr = err.message; renderAll(); return; }
+    if (!req) return;
+    // no card yet: open the card page now, inside this click, and send the request once the card is saved
+    if ((me && !me.hasCard) || (!me && !loadCreds())) { card.pending = () => run(it.id, req); card.state = "need"; startCard(cardWindow()); return; }
     b.disabled = true;
-    await act(it.id, async () => {
-      if (b.dataset.act === "offer") {
-        const r = await api("POST", `${path}/offer`, { buyerId: me.id, amount: amount(), ...msg() });
-        clearMsg(); $("amt").value = "";
-        notes[it.id] = r && r.reply && r.reply.action === "decline" ? "The seller declined, so your hold was released. Nothing was charged." : r && r.reply && r.reply.action === "accept" ? `Deal! Charged ${fmt(r.hold && (r.hold.captured ?? r.hold.amount))} USD and the item is yours. ${holdRef(r.hold)}` : "";
-      } else if (b.dataset.act === "accept") {
-        const r = await api("POST", `${path}/respond`, { buyerId: me.id, action: "accept", ...msg() });
+    await run(it.id, req);
+    b.disabled = false;
+  }
+
+  /** The API call for a drawer button, with the inputs read now (it may be sent later, after the card step). */
+  function request(act, it) {
+    const $ = (id) => drawer.root.getElementById(id);
+    const path = `/api/items/${encodeURIComponent(it.id)}`;
+    const m = $("msg") && $("msg").value.trim().slice(0, 280);
+    const msg = m ? { message: m } : {};
+    const clearMsg = () => { if ($("msg")) $("msg").value = ""; };
+    const clearAmt = () => { if ($("amt")) $("amt").value = ""; };
+    const amount = () => { const v = Math.round(Number($("amt") && $("amt").value)); if (!v || v <= 0) throw new Error("Enter an amount."); return v; };
+    const paid = (h) => fmt(h && (h.captured ?? h.amount));
+    switch (act) {
+      case "offer": return { path: `${path}/offer`, body: { amount: amount(), ...msg }, done: (r) => {
+        clearMsg(); clearAmt();
+        return r && r.reply && r.reply.action === "decline" ? "The seller declined, so your hold was released. Nothing was charged."
+          : r && r.reply && r.reply.action === "accept" ? `Deal! Charged ${paid(r.hold)} USD and the item is yours. ${holdRef(r.hold)}` : "";
+      } };
+      case "accept": return { path: `${path}/respond`, body: { action: "accept", ...msg }, done: (r) => {
         clearMsg();
-        notes[it.id] = `Deal! Charged ${fmt(r.hold && (r.hold.captured ?? r.hold.amount))} USD and the item is yours. ${holdRef(r.hold)}`;
-      } else if (b.dataset.act === "walk") {
-        await api("POST", `${path}/respond`, { buyerId: me.id, action: "walk_away", ...msg() });
-        clearMsg(); notes[it.id] = "You walked away. Your hold is released; nothing was charged.";
-      } else if (b.dataset.act === "bid") {
-        const max = amount();
-        const r = await api("POST", `${path}/bid`, { buyerId: me.id, max });
-        $("amt").value = "";
+        return `Deal! Charged ${paid(r && r.hold)} USD and the item is yours. ${holdRef(r && r.hold)}`;
+      } };
+      case "walk": return { path: `${path}/respond`, body: { action: "walk_away", ...msg }, done: () => {
+        clearMsg();
+        return "You walked away. Your hold is released; nothing was charged.";
+      } };
+      case "bid": { const max = amount(); return { path: `${path}/bid`, body: { max }, done: (r) => {
+        clearAmt();
         const lead = r && r.item && r.item.auction && r.item.auction.leader;
-        notes[it.id] = `Bid placed: up to ${fmt(max)} USD is held on your card. ${lead && (lead === me.name || lead === me.id) ? "You're leading." : "You're not leading yet."} ${holdRef(r && r.hold)}`;
-      } else if (b.dataset.act === "buy") {
-        const r = await api("POST", `${path}/buy`, { buyerId: me.id });
+        return `Bid placed: up to ${fmt(max)} USD is held on your card. ${lead && me && lead === me.name ? "You're leading." : "You're not leading yet."} ${holdRef(r && r.hold)}`;
+      } }; }
+      case "buy": return { path: `${path}/buy`, done: (r) => {
         const h = r && r.hold;
         const until = esc(h && h.refundableUntil ? fmtDate(h.refundableUntil) : it.guarantee || "");
-        notes[it.id] = shipped(it) ? `Ordered. Charged ${fmt(h && (h.captured ?? h.amount))} USD. If it doesn't arrive or isn't as described, refund it from “Your holds” until ${until}. ${holdRef(h)}`
-          : it.guarantee ? `Bought. Charged ${fmt(h && (h.captured ?? h.amount))} USD, refundable from “Your holds” until ${until} if you change your mind. ${holdRef(h)}`
-          : `Bought for ${fmt(h && (h.captured ?? h.amount))} USD. ${holdRef(h)}`;
-      }
-    });
-    b.disabled = false;
+        return shipped(it) ? `Ordered. Charged ${paid(h)} USD. If it doesn't arrive or isn't as described, refund it from “Your holds” until ${until}. ${holdRef(h)}`
+          : it.guarantee ? `Bought. Charged ${paid(h)} USD, refundable from “Your holds” until ${until} if you change your mind. ${holdRef(h)}`
+          : `Bought for ${paid(h)} USD. ${holdRef(h)}`;
+      } };
+    }
+    return null;
   }
 
   // ------------------------------------------------------------------ mounts
@@ -555,10 +680,22 @@
     }
   }
 
+  // keep `me` current when this buyer acts from another tab or page (holds carry display names, so check by id)
+  let lastSync = 0;
+  function sync() {
+    if (!me || !token || Date.now() - lastSync < 3000) return;
+    const b = myBuyer();
+    const unknown = items().some((it) => (it.holds || []).some((h) => h.buyer === me.name && !myIds.has(h.id)));
+    if (!unknown && !(b && b.hasCard !== me.hasCard)) return;
+    lastSync = Date.now();
+    refreshMe().then(() => { if (card.state && me && me.hasCard) cardAdded(); fireEvents(); renderAll(); }).catch(() => {});
+  }
+
   function connect() {
     const es = new EventSource(`${MARKET}/events`);
     es.onmessage = (e) => {
       try { S = JSON.parse(e.data); } catch { return; }
+      sync();
       fireEvents();
       renderAll();
       for (const fn of listeners) { try { fn(S); } catch (err) { console.error(err); } }
@@ -570,7 +707,7 @@
     new MutationObserver((recs) => { for (const r of recs) for (const n of r.addedNodes) if (n.nodeType === 1) { if (n.matches("[data-holdback-item]")) mount(n); scan(n); } })
       .observe(document.body, { childList: true, subtree: true });
     connect();
-    ensureBuyer().then(() => { fireEvents(); renderAll(); }).catch((e) => { lastErr = `Card setup failed: ${e.message}`; renderAll(); });
+    restore().then(() => { fireEvents(); renderAll(); }).catch((e) => { lastErr = `Couldn't load your buyer account: ${e.message}`; renderAll(); });
     setInterval(tick, 500);
   }
 

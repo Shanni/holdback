@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Monkey Studio Store</title>
+<title>Demo Store</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -51,11 +51,7 @@
   .product { display: grid; grid-template-columns: minmax(0, 55%) minmax(0, 1fr); gap: 56px; padding-top: 36px; padding-bottom: 56px; }
   .media { display: grid; gap: 10px; align-content: start; }
   .media .main { background: var(--soft); aspect-ratio: 1; display: grid; place-items: center; }
-  .media .main svg, .media .main img { width: 100%; height: 100%; display: block; }
-  .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .thumbs button { padding: 0; border: 1px solid transparent; background: var(--soft); aspect-ratio: 1; cursor: pointer; }
-  .thumbs button[aria-current="true"] { border-color: var(--ink); }
-  .thumbs svg { width: 100%; height: 100%; display: block; }
+  .media .main svg, .media .main img { width: 100%; height: 100%; display: block; object-fit: cover; }
   .info { min-width: 0; display: grid; align-content: start; gap: 0; }
   .vendor { font-size: 12px; letter-spacing: .13rem; text-transform: uppercase; color: var(--ink-75); }
   .info h1 { margin: 6px 0 14px; font-size: 40px; line-height: 1.15; font-weight: 400; color: var(--ink); letter-spacing: .06rem; overflow-wrap: anywhere; }
@@ -95,13 +91,16 @@
   .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px 10px; }
   .grid a { text-decoration: none; display: grid; gap: 6px; }
   .grid .img { background: var(--soft); aspect-ratio: 1; }
-  .grid .img svg { width: 100%; height: 100%; display: block; }
+  .grid .img svg, .grid .img img { width: 100%; height: 100%; display: block; object-fit: cover; }
   .grid .t { color: var(--ink); text-decoration: underline transparent; text-underline-offset: 3px; }
   .grid a:hover .t { text-decoration-color: currentColor; }
   .grid .p { font-size: 14px; }
   .grid .tag { font-size: 12px; justify-self: start; padding: 1px 10px; border-radius: 40px; background: var(--ink); color: #fff; letter-spacing: .04rem; }
   .grid .tag.sold { background: var(--soft); color: var(--ink); border: 1px solid var(--line-2); }
 
+  .emptystate { padding-top: 72px; padding-bottom: 96px; text-align: center; }
+  .emptystate h1 { margin: 0 0 10px; font-size: 32px; font-weight: 400; color: var(--ink); }
+  .emptystate p { margin: 0; }
   footer.site { background: var(--soft); padding: 40px 0; font-size: 14px; }
   footer.site .page { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
 
@@ -145,16 +144,16 @@
 <body>
 <div class="demo" role="region" aria-label="Demo controls">
   <div class="page">
-    <span><b>Holdback demo.</b> A fictional store in Shopify's default style, with the Holdback app block installed.</span>
+    <span><b>Holdback demo.</b> A demo storefront in Shopify's default style, with the Holdback app block installed. Products come from the merchant's market.</span>
     <span class="sp"></span>
     <span class="ctrls"><button type="button" id="showPlugin" aria-pressed="false">Show the plugin</button><button type="button" id="howBtn">How it's installed</button><a class="btn" href="../#ledger" target="_blank" rel="noopener">Seller's ledger ↗</a></span>
   </div>
 </div>
 
-<div class="announce">Free worldwide delivery on every 1/1 piece · Make an offer on selected works</div>
+<div class="announce">Make an offer on selected products · Offers and bids are holds on your card, charged only when the deal clears</div>
 <header class="site">
   <div class="page">
-    <a class="logo" href="./">Monkey Studio</a>
+    <a class="logo" href="./">Demo Store</a>
     <nav class="menu" aria-label="Main"><a href="./">Home</a><a href="./" aria-current="page">Catalog</a><a href="./">About</a><a href="./">Contact</a></nav>
     <div class="icons">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-label="Search"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
@@ -165,10 +164,11 @@
 </header>
 
 <main>
+  <section class="page emptystate" id="empty" hidden><h1 id="emptyH">No products yet</h1><p id="emptyP">The merchant adds them at <a href="/admin/">/admin/</a>.</p></section>
   <section class="page product" id="product">
-    <div class="media"><div class="main" id="mainArt"></div><div class="thumbs" id="thumbs"></div></div>
+    <div class="media"><div class="main" id="mainArt"></div></div>
     <div class="info">
-      <div class="vendor">Monkey Studio</div>
+      <div class="vendor">Demo Store</div>
       <h1 id="pTitle">Loading…</h1>
       <div class="price" id="pPrice"></div>
       <div class="tax">Tax included. <a href="./">Shipping</a> calculated at checkout.</div>
@@ -185,18 +185,18 @@
       <!-- ============================================================== -->
 
       <div class="desc" id="pDesc"></div>
-      <details><summary id="d1h">Edition</summary><p id="d1"></p></details>
-      <details><summary>Shipping &amp; returns</summary><p id="d2"></p></details>
+      <details id="dGuar" hidden><summary>Guarantee</summary><p id="dGuarT"></p></details>
+      <details><summary>How paying works</summary><p id="dPay"></p></details>
     </div>
   </section>
 
-  <section class="page related" aria-labelledby="relH">
+  <section class="page related" id="related" aria-labelledby="relH">
     <h2 id="relH">You may also like</h2>
     <div class="grid" id="grid"></div>
   </section>
 </main>
 
-<footer class="site"><div class="page"><span>© 2026 Monkey Studio</span><span>Payments: card, with Holdback offers, bids and guarantees</span></div></footer>
+<footer class="site"><div class="page"><span>© 2026 Demo Store</span><span>Payments: card, with Holdback offers, bids and guarantees</span></div></footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"><div class="k"><span id="toastK"></span><button type="button" aria-label="Dismiss" id="toastX">×</button></div><div class="m" id="toastM"></div><code id="toastC"></code></div>
 
@@ -219,56 +219,40 @@
 
 <script>
 "use strict";
-// Store-side code. Product pages come from the market snapshot here so the demo stays in sync;
-// a real store has its own catalog and only passes the item id to the block.
+// Store-side code. This demo store lists whatever products the merchant added to the market (/api/items, then
+// live updates); a real store has its own catalog and only passes the item id to the block.
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const money = (n) => `$${Number(n || 0).toFixed(2)} USD`;
 let items = [], current = new URLSearchParams(location.search).get("item");
 
-function monkey(hue, pose = 0) {
-  hue = Number(hue) || 0;
-  const f = `hsl(${hue} 45% 42%)`, face = `hsl(${hue} 55% 78%)`, bg = `hsl(${(hue + 160 + pose * 25) % 360} 60% ${88 - pose * 3}%)`;
-  const tilt = [0, -8, 8, 0][pose % 4], s = [1, 1.08, 1.08, .8][pose % 4];
-  return `<svg viewBox="0 0 120 120" role="img" aria-label="artwork"><rect width="120" height="120" fill="${bg}"/>
-    <g transform="rotate(${tilt} 60 60) translate(60 60) scale(${s}) translate(-60 -60)">
-    <circle cx="28" cy="58" r="15" fill="${f}"/><circle cx="92" cy="58" r="15" fill="${f}"/>
-    <circle cx="28" cy="58" r="8" fill="${face}"/><circle cx="92" cy="58" r="8" fill="${face}"/>
-    <circle cx="60" cy="60" r="36" fill="${f}"/><ellipse cx="60" cy="70" rx="24" ry="20" fill="${face}"/>
-    <ellipse cx="48" cy="52" rx="9" ry="10" fill="${face}"/><ellipse cx="72" cy="52" rx="9" ry="10" fill="${face}"/>
-    <circle cx="49" cy="54" r="4" fill="#1d1b16"/><circle cx="71" cy="54" r="4" fill="#1d1b16"/>
-    <ellipse cx="60" cy="68" rx="5" ry="3" fill="#1d1b16" opacity=".7"/>
-    <path d="M50 78 Q60 86 70 78" stroke="#1d1b16" stroke-width="3" fill="none" stroke-linecap="round"/></g></svg>`;
+const imgUrl = (src) => { try { return new URL(src, (window.Holdback ? Holdback.market : location.origin) + "/").href; } catch { return src; } };
+// products without an image: a soft gradient from the item's hue with its initial
+const initial = (t) => (String(t || "").trim().match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase();
+function placeholder(it) {
+  const h = Number(it.hue) || 0;
+  return `<svg viewBox="0 0 100 100" role="img" aria-label="${esc(it.name)}" style="background:linear-gradient(135deg,hsl(${h} 70% 90%),hsl(${(h + 40) % 360} 55% 76%))">
+    <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="34" font-weight="600" font-family="Assistant, system-ui, sans-serif" fill="hsl(${h} 35% 30%)">${esc(initial(it.name))}</text></svg>`;
 }
-const art = (it, pose) => it.image ? `<img src="${esc(it.image)}" alt="${esc(it.name)}">` : monkey(it.hue, pose);
-const DESC = {
-  unique: "A one-of-one hand-drawn monkey from the studio's first series. There is only one; make an offer or bid when it goes to auction.",
-  digital: "Print-ready, 8000 × 8000 px. Delivered the moment you buy, with a money-back guarantee you control.",
-  physical: "Made by hand in our studio, one at a time. Ships in 3–5 days, tracked.",
-};
-const DETAILS = {
-  unique: ["Edition", "1 of 1. Your offer or bid is only a hold on your card until the deal clears; if it doesn't, the hold is released and you're never charged.",
-    "Ships within a week of the deal clearing."],
-  digital: ["File", "PNG, 8000 × 8000 px, sRGB. Personal and print use.",
-    "Delivered at once. You can refund it yourself inside the guarantee window, without asking us."],
-  physical: ["Materials", "Handmade, so each one is slightly different. Care instructions come in the box.",
-    "Your card is charged when you order. If it doesn't arrive or isn't as described, you refund it yourself inside the window, no approval needed."],
+const art = (it) => it.image ? `<img src="${esc(imgUrl(it.image))}" alt="${esc(it.name)}">` : placeholder(it);
+const PAY = {
+  offers: "Make an offer below. It's a hold on your card, not a charge: you're charged only if the seller accepts, and you can withdraw it until then.",
+  auction: "Bid your maximum. It's held on your card until the auction closes; if you win you pay the second-highest bid + 1, otherwise the hold is released.",
+  dutch: "The price drops on a schedule until someone buys. Buying charges the current price at once.",
 };
 
-let pose = 0;
 function renderProduct() {
   const it = items.find((i) => i.id === current);
   if (!it) return;
-  if ($("pTitle").textContent !== it.name) { $("pTitle").textContent = it.name; document.title = `${it.name} – Monkey Studio`; pose = 0; }
-  $("pPrice").innerHTML = it.status === "sold" ? `<s>${money(it.ask)}</s> &nbsp;Sold` : money(it.ask);
-  const main = art(it, pose);
-  if ($("mainArt").dataset.k !== `${it.id}:${pose}`) { $("mainArt").innerHTML = main; $("mainArt").dataset.k = `${it.id}:${pose}`; }
-  const th = it.image ? "" : [0, 1, 2, 3].map((p) => `<button type="button" data-pose="${p}" aria-label="View ${p + 1}" aria-current="${p === pose}">${monkey(it.hue, p)}</button>`).join("");
-  if ($("thumbs").dataset.k !== `${it.id}:${pose}`) { $("thumbs").innerHTML = th; $("thumbs").dataset.k = `${it.id}:${pose}`; }
-  const d = `<p>${esc(it.description || DESC[it.kind] || DESC.unique)}</p>`;
+  if ($("pTitle").textContent !== it.name) { $("pTitle").textContent = it.name; document.title = `${it.name} – Demo Store`; }
+  $("pPrice").innerHTML = it.status === "sold" ? `<s>${money(it.ask)}</s> &nbsp;Sold` : it.status !== "listed" ? `${money(it.ask)} &nbsp;Unavailable` : money(it.ask);
+  const main = art(it);
+  if ($("mainArt").dataset.k !== main) { $("mainArt").innerHTML = main; $("mainArt").dataset.k = main; }
+  const d = it.description ? `<p>${esc(it.description)}</p>` : "";
   if ($("pDesc").innerHTML !== d) $("pDesc").innerHTML = d;
-  const [h1, t1, t2] = DETAILS[it.kind] || DETAILS.unique;
-  $("d1h").textContent = h1; $("d1").textContent = t1; $("d2").textContent = t2;
+  $("dGuar").hidden = !it.guarantee;
+  $("dGuarT").textContent = it.guarantee ? `${it.guarantee}: if it ${it.kind === "physical" ? "doesn't arrive or isn't as described" : "isn't what you wanted"}, refund it yourself from the Holdback panel, no seller approval needed.` : "";
+  $("dPay").textContent = PAY[it.mechanism] || "Your card is charged when you buy.";
   // tell the app block which item this product is
   const hb = $("hb");
   if (hb.dataset.holdbackItem !== it.id) { hb.dataset.holdbackItem = it.id; window.Holdback && Holdback.mount(hb, it.id); }
@@ -276,17 +260,23 @@ function renderProduct() {
 
 function renderGrid() {
   const others = items.filter((i) => i.id !== current);
-  const tag = (i) => i.status === "sold" ? `<span class="tag sold">Sold</span>`
+  const tag = (i) => i.status === "sold" ? `<span class="tag sold">Sold</span>` : i.status !== "listed" ? `<span class="tag sold">Unavailable</span>`
     : i.mechanism === "auction" ? `<span class="tag">Live auction</span>` : i.mechanism === "dutch" ? `<span class="tag">Price dropping</span>`
     : i.mechanism === "offers" ? `<span class="tag">Make an offer</span>` : i.kind === "physical" ? `<span class="tag">Delivery protection</span>` : i.guarantee ? `<span class="tag">${esc(i.guarantee)} guarantee</span>` : "";
-  const html = others.length ? others.map((i) => `<a href="?item=${encodeURIComponent(i.id)}" data-item="${esc(i.id)}"><div class="img">${art(i)}</div>${tag(i)}<span class="t">${esc(i.name)}</span><span class="p">${money(i.ask)}</span></a>`).join("")
-    : `<p>More pieces are on the way.</p>`;
+  const html = others.map((i) => `<a href="?item=${encodeURIComponent(i.id)}" data-item="${esc(i.id)}"><div class="img">${art(i)}</div>${tag(i)}<span class="t">${esc(i.name)}</span><span class="p">${money(i.ask)}</span></a>`).join("");
+  $("related").hidden = !others.length;
   if ($("grid").dataset.k !== html) { $("grid").innerHTML = html; $("grid").dataset.k = html; }
 }
 
-function onSnapshot(S) {
-  items = (S && S.items) || [];
-  if (!items.length) { $("pTitle").textContent = "Nothing listed yet"; $("pPrice").textContent = "The seller agent hasn't listed anything. Start the scenario from the gallery."; return; }
+function showEmpty(title, html) {
+  $("product").hidden = $("related").hidden = true;
+  $("empty").hidden = false;
+  $("emptyH").textContent = title; $("emptyP").innerHTML = html;
+}
+function onItems(list) {
+  items = list || [];
+  if (!items.length) { showEmpty("No products yet", `The merchant adds them at <a href="/admin/">/admin/</a>.`); return; }
+  $("empty").hidden = true; $("product").hidden = false;
   if (!current || !items.some((i) => i.id === current)) current = (items.find((i) => i.status === "listed" && i.mechanism === "offers") || items.find((i) => i.status === "listed") || items[0]).id;
   renderProduct(); renderGrid();
 }
@@ -298,8 +288,7 @@ function go(id) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 $("grid").addEventListener("click", (e) => { const a = e.target.closest("a[data-item]"); if (!a || e.metaKey || e.ctrlKey) return; e.preventDefault(); go(a.dataset.item); });
-window.addEventListener("popstate", () => { current = new URLSearchParams(location.search).get("item"); renderProduct(); renderGrid(); });
-$("thumbs").addEventListener("click", (e) => { const b = e.target.closest("[data-pose]"); if (b) { pose = Number(b.dataset.pose); renderProduct(); } });
+window.addEventListener("popstate", () => { current = new URLSearchParams(location.search).get("item"); onItems(items); });
 for (const b of document.querySelectorAll("[data-card]")) b.onclick = () => { $("storenote").textContent = "The store's own checkout is switched off in this demo. Use the Holdback block below."; };
 
 // ---- the store reacting to Holdback events (optional integration)
@@ -333,11 +322,11 @@ $("showPlugin").onclick = () => {
   $("showPlugin").setAttribute("aria-pressed", String(on));
   if (on) document.querySelector(".appblock").scrollIntoView({ behavior: "smooth", block: "center" });
 };
-$("codeHtml").textContent = `<script src="${location.origin}/holdback.js" defer><\/script>\n<div data-holdback-item="${current || "monkey-3"}"></div>`;
+$("codeHtml").textContent = `<script src="${location.origin}/holdback.js" defer><\/script>\n<div data-holdback-item="${current || "YOUR-PRODUCT-ID"}"></div>`;
 let loaded = false;
 $("howBtn").onclick = async () => {
   $("how").showModal();
-  $("codeHtml").textContent = `<script src="${Holdback.market}/holdback.js" defer><\/script>\n<div data-holdback-item="${current || "monkey-3"}"></div>`;
+  $("codeHtml").textContent = `<script src="${Holdback.market}/holdback.js" defer><\/script>\n<div data-holdback-item="${current || "YOUR-PRODUCT-ID"}"></div>`;
   if (loaded) return; loaded = true;
   for (const [id, f] of [["codeLiquid", "extension/blocks/holdback.liquid"], ["codeToml", "extension/shopify.extension.toml"]]) {
     try { const r = await fetch(f); $(id).textContent = r.ok ? await r.text() : `(${f} not found)`; } catch { $(id).textContent = `(couldn't load ${f})`; }
@@ -346,9 +335,12 @@ $("howBtn").onclick = async () => {
 $("howX").onclick = () => $("how").close();
 $("how").addEventListener("click", (e) => { if (e.target === $("how")) $("how").close(); });
 
-addEventListener("DOMContentLoaded", () => {
-  if (!window.Holdback) { $("pTitle").textContent = "Holdback didn't load"; return; }
-  Holdback.onChange(onSnapshot);
+addEventListener("DOMContentLoaded", async () => {
+  if (!window.Holdback) { showEmpty("Holdback didn't load", "The widget script (holdback.js) couldn't be loaded from the market."); return; }
+  let live = false;
+  Holdback.onChange((S) => { live = true; onItems(S && S.items); });   // every change, over the market's event stream
+  try { const r = await fetch(`${Holdback.market}/api/items`); if (r.ok && !live) onItems(await r.json()); }
+  catch { if (!live) showEmpty("Can't reach the market", "The product list couldn't be loaded. Is the market server running?"); }
 });
 </script>
 </body>

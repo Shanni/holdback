@@ -2,15 +2,12 @@
 //
 // Seller (server-side, floor hidden from buyers), per demo/API.md:
 //   offer >= ask (or >= the seller's last counter) -> accept
-//   offer <  floor -> decline (hold refunded), counter at ask
+//   offer <  floor -> decline (hold released), counter at ask
 //   otherwise counter; round n counter = max(floor, ask - (ask - offer) * c[n]),
 //     c = [0.3, 0.5, 0.7, 0.85] (best-price) or [0.5, 0.75, 0.9, 1] (quick-sale);
 //   after 4 rounds: final offer = max(floor, midpoint of the offer and the last counter).
 // Counters never go back up, and a counter at or below the offer becomes an accept.
 // An offer within 3% of ask of the standing price is accepted ("close enough").
-//
-// Buyer agent: open at ~55% of ask, concede half the way toward the owner's max each
-// round, accept a counter at or under max, walk away when already at max.
 
 export type Goal = "best-price" | "quick-sale";
 
@@ -46,7 +43,7 @@ export type SellerReply = {
 //   question   -> the reply answers with item facts
 //   bundle / first_purchase -> tone only
 export type Intent = "hardship" | "enthusiasm" | "bundle" | "first_purchase" | "rude" | "question";
-export type ItemFacts = { name: string; kind?: "unique" | "digital" | "physical"; guarantee?: string };
+export type ItemFacts = { name: string; kind?: "unique" | "digital" | "physical"; guarantee?: string; description?: string };
 export type MessageRead = { intents: Intent[]; terms: Partial<Record<Intent, string>> };
 
 const RULES: [Intent, RegExp][] = [
@@ -80,16 +77,20 @@ function seedOf(s: string) {
 }
 const pick = <T,>(xs: T[], seed: number) => xs[seed % xs.length];
 
+/** "7 days" → "7-day", for "a 7-day guarantee". */
+export const dayForm = (g: string) => g.replace(/^(\d+) days?$/, "$1-day");
+
 function factLine(item: ItemFacts | undefined, term: string | undefined) {
   const name = item?.name ?? "this piece";
   const digital = item?.kind === "digital";
   const edition = digital ? `${name} is a digital download` : `${name} is a 1/1, the only edition there is`;
   const howPaid = digital ? "you're only charged once it's delivered" : "your card is only authorized until we agree, then charged the agreed price";
-  const g = item?.guarantee ? ` and it comes with a ${item.guarantee} money-back guarantee` : "";
+  const g = item?.guarantee ? ` and it comes with a ${dayForm(item.guarantee)} money-back guarantee` : "";
   const t = term ?? "";
-  if (/who|artist|creator/.test(t)) return `Good question: ${name} is from the gallery's own monkey series, ${digital ? "a digital download" : "a 1/1"}, and ${howPaid}${g}.`;
+  const about = item?.description ? ` ${item.description.split(/(?<=[.!?])\s/)[0]}` : "";
+  if (/who|artist|creator/.test(t)) return `Good question: ${name} is ${digital ? "a digital download" : "a 1/1"}.${about} And ${howPaid}${g}.`;
   if (/escrow|refund|authentic|provenance/.test(t)) return `On that: ${howPaid}, and ${digital ? `${name} is a digital download` : `${name} is a 1/1`}${g}.`;
-  if (/guarantee/.test(t)) return item?.guarantee ? `${name} has a ${item.guarantee} money-back guarantee, and ${howPaid}.` : `No guarantee on ${name}, but ${howPaid}, and if we don't agree your hold comes straight back.`;
+  if (/guarantee/.test(t)) return item?.guarantee ? `${name} has a ${dayForm(item.guarantee)} money-back guarantee, and ${howPaid}.` : `No guarantee on ${name}, but ${howPaid}, and if we don't agree your hold comes straight back.`;
   return `You asked about rarity: ${edition}, and ${howPaid}${g}.`;
 }
 
@@ -211,38 +212,4 @@ export function sellerReply(i: SellerInput): SellerReply {
       ? `It stays at ${amount} USD.`
       : pick([`I can do ${amount} USD.`, `My counter is ${amount} USD.`, `How about ${amount} USD?`], seed >>> 3);
   return { action: "counter", amount, final: final || undefined, message: say("counter", plain, num), ...tag };
-}
-
-export type BuyerInput = {
-  ask: number;
-  max: number;                 // owner's spending limit
-  lastOffer?: number;          // our previous offer on this item
-  reply?: { action: "accept" | "counter" | "decline"; amount: number }; // seller's last reply
-  round?: number;              // offers made so far
-  maxRounds?: number;          // give up after this many offers (default 6)
-  open?: number;               // opening fraction of ask (default 0.55)
-};
-
-export type BuyerMove =
-  | { action: "offer"; amount: number; message: string }
-  | { action: "accept"; amount: number; message: string }
-  | { action: "walk_away"; message: string }
-  | { action: "done"; message: string };
-
-export function buyerNext(i: BuyerInput): BuyerMove {
-  const open = i.open ?? 0.55;
-  if (i.lastOffer === undefined || !i.reply) {
-    const amount = Math.max(1, Math.min(i.max, Math.round(i.ask * open)));
-    return { action: "offer", amount, message: `Would you take ${amount} USD?` };
-  }
-  if (i.reply.action === "accept") return { action: "done", message: "Deal." };
-  if (i.reply.amount <= i.max) {
-    return { action: "accept", amount: i.reply.amount, message: `${i.reply.amount} works for me. Deal.` };
-  }
-  if (i.lastOffer >= i.max || (i.round ?? 0) >= (i.maxRounds ?? 6)) {
-    return { action: "walk_away", message: `${i.reply.amount} is above my owner's limit. I'll pass.` };
-  }
-  const step = Math.max(1, Math.ceil((i.max - i.lastOffer) / 2));
-  const amount = Math.min(i.max, i.reply.amount - 1, i.lastOffer + step);
-  return { action: "offer", amount, message: `I can stretch to ${amount} USD.` };
 }

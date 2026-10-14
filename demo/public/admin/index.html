@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Holdback Merchant Admin</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Crect x=%272.5%27 y=%272.5%27 width=%2719%27 height=%2719%27 rx=%274%27 fill=%27%23c7b5ff%27 stroke=%27%23000%27 stroke-width=%272%27/%3E%3Crect x=%278%27 y=%278%27 width=%278%27 height=%278%27 rx=%271.5%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,300;6..72,400&display=swap" rel="stylesheet">
+<style>
+  /* Same tokens as the Gallery's purple "Bright" skin (demo/public/index.html) */
+  :root {
+    --band: #c7b5ff; --on-band: #000000; --band-muted: rgba(0, 0, 0, .66); --band-line: rgba(0, 0, 0, .2);
+    --r-lg: 0; --r-md: 0; --r-sm: 0; --r-btn: 999px; --r-pill: 999px;
+    --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --display: Newsreader, "Iowan Old Style", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --canvas: #ffffff; --surface: #ffffff; --sunken: #f6f6f4; --ink: #000000; --ink-2: #1f1f1f; --muted: #5f5f5f;
+    --line: rgba(0, 0, 0, .14); --line-strong: rgba(0, 0, 0, .55); --focus: #000000; --ring: rgba(0, 0, 0, .1);
+    --agent: color-mix(in srgb, var(--band) 22%, #ffffff); --agent-line: color-mix(in srgb, var(--band) 55%, #000000 8%);
+    --accent: #000000; --on-accent: #ffffff;
+    --held: #b54708; --held-bg: #fffaeb; --held-line: #fedf89;
+    --cap: #067647; --cap-bg: #ecfdf3; --cap-line: #abefc6;
+    --ref: #3e4c7a; --ref-bg: #eef2f8; --ref-line: #c9d3e6;
+    --err: #b42318; --err-bg: #fef3f2; --err-line: #fecdca;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas: #000000; --surface: #000000; --sunken: #0d0d0d; --ink: #ffffff; --ink-2: #e6e6e6; --muted: rgba(255, 255, 255, .6);
+      --line: rgba(255, 255, 255, .16); --line-strong: rgba(255, 255, 255, .6); --focus: var(--band); --ring: rgba(255, 255, 255, .14);
+      --agent: color-mix(in srgb, var(--band) 14%, #000000); --agent-line: color-mix(in srgb, var(--band) 40%, #000000);
+      --accent: var(--band); --on-accent: #000000;
+      --held: #fdb022; --held-bg: #2a1f0a; --held-line: #5c4210;
+      --cap: #47cd89; --cap-bg: #0a2a1b; --cap-line: #155c3a;
+      --ref: #a4b6e0; --ref-bg: #172034; --ref-line: #2e3e62;
+      --err: #fda29b; --err-bg: #3a1512; --err-line: #6b2a24; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --canvas: #000000; --surface: #000000; --sunken: #0d0d0d; --ink: #ffffff; --ink-2: #e6e6e6; --muted: rgba(255, 255, 255, .6);
+    --line: rgba(255, 255, 255, .16); --line-strong: rgba(255, 255, 255, .6); --focus: var(--band); --ring: rgba(255, 255, 255, .14);
+    --agent: color-mix(in srgb, var(--band) 14%, #000000); --agent-line: color-mix(in srgb, var(--band) 40%, #000000);
+    --accent: var(--band); --on-accent: #000000;
+    --held: #fdb022; --held-bg: #2a1f0a; --held-line: #5c4210;
+    --cap: #47cd89; --cap-bg: #0a2a1b; --cap-line: #155c3a;
+    --ref: #a4b6e0; --ref-bg: #172034; --ref-line: #2e3e62;
+    --err: #fda29b; --err-bg: #3a1512; --err-line: #6b2a24; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { overflow-x: hidden; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .muted { color: var(--muted); }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* top bar + band */
+  .topbar, .band { background: var(--band); color: var(--on-band); }
+  .topbar { border-bottom: 1px solid var(--band-line); }
+  .topbar .wrap { min-height: 56px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; padding-top: 8px; padding-bottom: 8px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+  .brand svg { width: 22px; height: 22px; flex: none; }
+  .brand .crumb { color: var(--band-muted); font-weight: 400; }
+  .brand .crumb::before { content: "/"; margin: 0 8px 0 2px; color: var(--band-line); }
+  .hright { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: flex-end; min-width: 0; }
+  .meta { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--band-line); border-radius: var(--r-btn); color: var(--on-band); font-size: 12px; }
+  .meta .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(0, 0, 0, .35); flex: none; }
+  .meta .dot.on { background: #0a7d3e; }
+  .testbadge { font: 600 11px/18px var(--mono); letter-spacing: .06em; padding: 0 7px; background: #000; color: var(--band); border-radius: var(--r-pill); }
+  .band { border-bottom: 1px solid var(--band-line); margin-bottom: 28px; }
+  .pagehead { padding-top: 48px; padding-bottom: 36px; display: grid; gap: 28px; }
+  h1 { margin: 0; font-family: var(--display); font-weight: 300; font-size: 56px; line-height: 1.02; letter-spacing: -0.025em; }
+  .band p { margin: 14px 0 0; font-size: 16px; max-width: 64ch; color: var(--band-muted); }
+  .ledger { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--band-line); }
+  .kpi { padding: 16px 20px 18px; min-width: 0; }
+  .kpi + .kpi { border-left: 1px solid var(--band-line); }
+  .kl { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+  .kl i { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, .35); flex: none; background: transparent; }
+  .kl i.held { background: #b54708; } .kl i.captured { background: #067647; } .kl i.live { background: #000; }
+  .kv { font-family: var(--display); font-weight: 300; font-size: 40px; letter-spacing: -0.03em; line-height: 1.05; margin-top: 8px; overflow-wrap: anywhere; }
+  .kv small { font-family: var(--sans); color: var(--band-muted); font-size: 13px; letter-spacing: 0; margin-left: 4px; }
+
+  /* buttons + fields */
+  .btn { height: 34px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); border-radius: var(--r-btn); padding: 0 18px; cursor: pointer; font-weight: 500; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+  .btn:hover:not(:disabled) { opacity: .88; }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--ink); }
+  .btn.ghost:hover:not(:disabled) { opacity: 1; background: var(--agent); }
+  .btn.danger { background: transparent; color: var(--err); border-color: var(--err-line); }
+  .btn.danger:hover:not(:disabled) { opacity: 1; background: var(--err-bg); }
+  .btn.small { height: 28px; padding: 0 12px; font-size: 12px; }
+  .btn:disabled { opacity: .38; cursor: not-allowed; }
+  .topbar .btn { background: #000; border-color: #000; color: #fff; }
+  .topbar .btn.ghost { background: transparent; color: #000; }
+  .topbar .btn.ghost:hover { background: rgba(255, 255, 255, .25); }
+
+  .field { display: grid; gap: 4px; margin-top: 14px; min-width: 0; }
+  .field > label, .field > .lbl, fieldset > legend { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+  .field input[type=text], .field input[type=number], .field input[type=url], .field input[type=password], .field textarea, .field select {
+    width: 100%; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); }
+  .field textarea { height: auto; min-height: 76px; padding: 8px 10px; resize: vertical; }
+  .field input:focus, .field textarea:focus, .field select:focus, .editbox textarea:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px var(--agent); }
+  .help { font-size: 12px; color: var(--muted); }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
+  fieldset { border: 0; padding: 0; margin: 14px 0 0; min-width: 0; }
+  fieldset > legend { padding: 0; margin-bottom: 6px; }
+  .choices { display: grid; gap: 6px; }
+  .choice { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border: 1px solid var(--line); cursor: pointer; background: var(--surface); }
+  .choice:hover { border-color: var(--line-strong); }
+  .choice:has(input:checked) { border-color: var(--ink); box-shadow: inset 4px 0 0 var(--band); }
+  .choice input { margin: 3px 0 0; accent-color: #000; flex: none; }
+  .choice b { font-weight: 600; display: block; }
+  .choice span { font-size: 12px; color: var(--muted); }
+  .choices.inline { grid-template-columns: 1fr 1fr; }
+  .imgrow { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
+  .preview { width: 72px; height: 72px; object-fit: cover; border: 1px solid var(--line); flex: none; }
+  .err { margin-top: 10px; padding: 8px 10px; background: var(--err-bg); border: 1px solid var(--err-line); color: var(--err); font-size: 13px; overflow-wrap: anywhere; }
+  .ok { margin-top: 10px; padding: 8px 10px; background: var(--cap-bg); border: 1px solid var(--cap-line); color: var(--cap); font-size: 13px; overflow-wrap: anywhere; }
+  .err:empty, .ok:empty { display: none; }
+
+  /* layout */
+  main.wrap { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 28px; padding-bottom: 40px; align-items: start; }
+  .panel { background: var(--surface); border: 1px solid var(--line); min-width: 0; }
+  .panel > h2 { margin: 0; padding: 14px 18px; font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: -0.015em; border-bottom: 1px solid var(--line); }
+  .pbody { padding: 4px 18px 18px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 18px; }
+  aside { position: sticky; top: 16px; }
+  .colhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 14px; flex-wrap: wrap; }
+  .colhead h2 { margin: 0; font-family: var(--display); font-weight: 300; font-size: 30px; letter-spacing: -0.02em; }
+  .list { display: grid; gap: 12px; }
+  .empty { padding: 28px 22px; border: 1px dashed var(--line-strong); color: var(--muted); }
+
+  /* product card */
+  .prod { background: var(--surface); border: 1px solid var(--line); padding: 20px; display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 18px; }
+  .prod.off { background: var(--sunken); }
+  .art { width: 88px; height: 88px; display: block; object-fit: cover; border: 1px solid var(--line); }
+  .title { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+  .title h3 { margin: 0 4px 0 0; font-family: var(--display); font-weight: 400; font-size: 24px; letter-spacing: -0.015em; line-height: 1.15; overflow-wrap: anywhere; }
+  .badge { font-size: 12px; font-weight: 500; padding: 0 8px; border: 1px solid var(--line-strong); color: var(--ink-2); white-space: nowrap; line-height: 20px; border-radius: var(--r-pill); }
+  .badge.live { background: var(--band); color: #000; border-color: transparent; }
+  .badge.sold { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
+  .badge.unsold { color: var(--muted); }
+  .facts { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 8px 0 12px; font-size: 13px; color: var(--muted); }
+  .facts strong { color: var(--ink); font-weight: 600; }
+  .facts .priv { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 0 5px; margin-left: 4px; }
+  .reason { margin: 0 0 12px; padding: 10px 12px; background: var(--agent); border: 1px solid var(--agent-line); font-size: 13px; color: var(--ink-2); }
+  .reason .rl { display: block; font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+  .desc { margin: 0 0 12px; font-size: 13px; color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .holds { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; margin: 0 0 12px; }
+  .holds .lbl { font-weight: 600; color: var(--ink-2); margin-right: 2px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 0 8px; line-height: 20px; border: 1px solid var(--line-strong); white-space: nowrap; color: var(--ink); border-radius: var(--r-pill); }
+  .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--dot, currentColor); }
+  .chip.held { --dot: var(--held); } .chip.captured { --dot: var(--cap); } .chip.refunded { --dot: var(--ref); } .chip.released { --dot: var(--muted); }
+  .chip.zero { opacity: .45; }
+  .sold { font-size: 13px; color: var(--cap); font-weight: 600; margin: 0 0 12px; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .ctl .sp { flex: 1; }
+  .seg { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--sunken); font-size: 12px; }
+  .seg button { border: 0; background: transparent; padding: 3px 11px; border-radius: var(--r-pill); cursor: pointer; color: var(--muted); font-weight: 500; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--canvas); }
+  .seg button:disabled { cursor: wait; }
+  .editbox { margin: 0 0 12px; display: grid; gap: 8px; }
+  .editbox textarea { width: 100%; min-height: 80px; padding: 8px 10px; border: 1px solid var(--line-strong); background: var(--surface); resize: vertical; }
+  .editbox .row { display: flex; gap: 8px; }
+
+  /* sign-in */
+  .signin { max-width: 560px; margin: 0 auto 48px; }
+  .signin code, .help code { font-family: var(--mono); font-size: 12px; background: var(--sunken); border: 1px solid var(--line); padding: 0 4px; overflow-wrap: anywhere; }
+
+  @media (max-width: 1000px) {
+    main.wrap { grid-template-columns: minmax(0, 1fr); }
+    aside { position: static; }
+  }
+  @media (max-width: 720px) {
+    .wrap { padding-left: 16px; padding-right: 16px; }
+    h1 { font-size: 40px; }
+    .pagehead { padding-top: 28px; padding-bottom: 24px; gap: 20px; }
+    .ledger { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kpi:nth-child(3) { border-left: 0; }
+    .kpi:nth-child(n+3) { border-top: 1px solid var(--band-line); }
+    .kv { font-size: 30px; }
+    .hright { justify-content: flex-start; }
+  }
+  @media (max-width: 520px) {
+    .prod { grid-template-columns: 64px minmax(0, 1fr); gap: 12px; padding: 14px; }
+    .art { width: 64px; height: 64px; }
+    .prod > .body { grid-column: 1 / -1; }
+    .prod > .artcol { grid-row: 1; }
+    .prod .title h3 { font-size: 21px; }
+    .two, .choices.inline { grid-template-columns: minmax(0, 1fr); }
+    .badge { white-space: normal; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="2.5" width="19" height="19" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+      <span>Holdback</span><span class="crumb">Merchant admin</span>
+    </div>
+    <div class="hright">
+      <div class="meta" id="pay" aria-live="polite"><span class="dot"></span><span id="payName">Payments…</span></div>
+      <a class="btn ghost small" href="/" target="_blank" rel="noopener">Gallery ↗</a>
+      <button class="btn small" id="signOut" type="button" hidden>Sign out</button>
+    </div>
+  </div>
+</header>
+
+<div class="band">
+  <div class="wrap pagehead">
+    <div>
+      <h1>Your products</h1>
+      <p>List products here and the seller agent sells them: it picks the sales mechanism from demand, negotiates above your private floor, and every offer, bid or purchase is a hold on the buyer's card, captured only when a deal clears.</p>
+    </div>
+    <div class="ledger" id="ledger" hidden aria-label="Totals">
+      <div class="kpi"><div class="kl"><i class="live"></i>Listed</div><div class="kv" id="kListed">0</div></div>
+      <div class="kpi"><div class="kl"><i></i>Sold</div><div class="kv" id="kSold">0</div></div>
+      <div class="kpi"><div class="kl"><i class="held"></i>Open holds</div><div class="kv" id="kHeld">$0</div></div>
+      <div class="kpi"><div class="kl"><i class="captured"></i>Captured</div><div class="kv" id="kCap">$0</div></div>
+    </div>
+  </div>
+</div>
+
+<section class="wrap signin" id="signin" hidden aria-labelledby="signinTitle">
+  <div class="panel">
+    <h2 id="signinTitle">Sign in</h2>
+    <form class="pbody" id="tokenForm" autocomplete="off">
+      <div class="err" id="tokenErr" role="alert"></div>
+      <div class="field">
+        <label for="tokenInput">Admin token</label>
+        <input type="password" id="tokenInput" required spellcheck="false" autocomplete="off">
+        <div class="help">Paste the server's admin token: the <code>ADMIN_TOKEN</code> environment variable if you set one, otherwise the contents of <code>data/admin-token</code> (generated on first start; the server prints where it is). It stays in this browser until you sign out.</div>
+      </div>
+      <div class="actions"><button class="btn" type="submit">Sign in</button></div>
+    </form>
+  </div>
+</section>
+
+<main class="wrap" id="app" hidden>
+  <aside>
+    <section class="panel" aria-labelledby="addTitle">
+      <h2 id="addTitle">Add product</h2>
+      <form class="pbody" id="addForm" novalidate>
+        <div class="field">
+          <label for="fName">Name</label>
+          <input type="text" id="fName" name="name" maxlength="80" required>
+        </div>
+        <div class="field">
+          <label for="fAsk">Price (USD)</label>
+          <input type="number" id="fAsk" name="ask" min="0.01" step="0.01" inputmode="decimal" required>
+          <div class="help" id="askHelp">The asking price buyers see.</div>
+        </div>
+        <fieldset>
+          <legend>Kind</legend>
+          <div class="choices">
+            <label class="choice"><input type="radio" name="kind" value="unique" checked><div><b>One of a kind</b><span>Negotiable. The seller agent takes offers, runs auctions or drops the price.</span></div></label>
+            <label class="choice"><input type="radio" name="kind" value="digital"><div><b>Digital</b><span>Fixed price with a money-back guarantee.</span></div></label>
+            <label class="choice"><input type="radio" name="kind" value="physical"><div><b>Physical</b><span>Fixed price; refundable if lost, damaged or not as described.</span></div></label>
+          </div>
+        </fieldset>
+        <div id="uniqueOpts">
+          <div class="field">
+            <label for="fFloor">Floor (USD, private)</label>
+            <input type="number" id="fFloor" name="floor" min="0.01" step="0.01" inputmode="decimal" aria-describedby="floorHelp">
+            <div class="help" id="floorHelp">The lowest price the seller agent will accept. Never shown to buyers. Leave empty for 60% of the price.</div>
+          </div>
+          <fieldset>
+            <legend>Goal</legend>
+            <div class="choices inline">
+              <label class="choice"><input type="radio" name="goal" value="best-price" checked><div><b>Best price</b><span>Hold firm, concede slowly.</span></div></label>
+              <label class="choice"><input type="radio" name="goal" value="quick-sale"><div><b>Quick sale</b><span>Concede faster, sell sooner.</span></div></label>
+            </div>
+          </fieldset>
+        </div>
+        <div id="fixedOpts" hidden>
+          <div class="field">
+            <label for="fDays">Guarantee (days)</label>
+            <input type="number" id="fDays" name="guaranteeDays" min="1" step="1" inputmode="numeric" placeholder="7">
+            <div class="help" id="daysHelp">How long the buyer can get their money back. Default 7 days for digital, 14 for physical.</div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="fDesc">Description <span class="muted">(optional)</span></label>
+          <textarea id="fDesc" name="description" maxlength="600" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <span class="lbl" id="imgLbl">Image <span class="muted">(optional)</span></span>
+          <label class="sr" for="fFile">Upload an image</label>
+          <input type="file" id="fFile" accept="image/png,image/jpeg,image/webp,image/gif" aria-describedby="imgHelp">
+          <label class="sr" for="fImgUrl">Or image URL</label>
+          <input type="url" id="fImgUrl" placeholder="…or paste an https:// image URL" inputmode="url">
+          <div class="help" id="imgHelp">PNG, JPEG, WebP or GIF, up to 4 MB.</div>
+          <div class="imgrow" id="imgRow" hidden>
+            <img class="preview" id="imgPreview" alt="Preview of the product image">
+            <button class="btn ghost small" type="button" id="imgClear">Remove image</button>
+          </div>
+        </div>
+        <div class="err" id="addErr" role="alert"></div>
+        <div class="ok" id="addOk" role="status"></div>
+        <div class="actions"><button class="btn" type="submit" id="addBtn">List product</button></div>
+      </form>
+    </section>
+  </aside>
+
+  <section aria-labelledby="listTitle">
+    <div class="colhead">
+      <h2 id="listTitle">Products</h2>
+      <span class="muted" id="listMeta" aria-live="polite"></span>
+    </div>
+    <div class="err" id="listErr" role="alert"></div>
+    <div class="list" id="list"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const KEY = "holdback.adminToken";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = (n) => Number.isInteger(+n) ? (+n).toLocaleString("en-US") : (+n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const usd = (n) => n == null || n === "" || isNaN(n) ? "–" : "$" + num(n);
+const MECH = { "buy-now": "Buy now", offers: "Offers", auction: "Proxy auction", dutch: "Dutch auction" };
+const KIND = { unique: "One of a kind", digital: "Digital", physical: "Physical" };
+
+let token = "";
+try { token = localStorage.getItem(KEY) || ""; } catch {}
+let products = [];
+let es;
+
+// ---------------------------------------------------------------- auth
+function showSignin(msg) {
+  $("app").hidden = true; $("ledger").hidden = true; $("signOut").hidden = true;
+  $("signin").hidden = false;
+  $("tokenErr").textContent = msg || "";
+  $("tokenInput").value = "";
+  $("tokenInput").focus();
+}
+function showApp() {
+  $("signin").hidden = true; $("app").hidden = false; $("ledger").hidden = false; $("signOut").hidden = false;
+}
+function setToken(t) {
+  token = t;
+  try { t ? localStorage.setItem(KEY, t) : localStorage.removeItem(KEY); } catch {}
+}
+$("tokenForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const t = $("tokenInput").value.trim();
+  if (!t) return;
+  setToken(t);
+  showApp();
+  await refresh();
+});
+$("signOut").addEventListener("click", () => {
+  setToken("");
+  products = [];
+  rendered.clear(); editing.clear();
+  $("list").innerHTML = "";
+  showSignin("");
+});
+
+class Unauthorized extends Error {}
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    method: opts.method || "GET",
+    headers: { authorization: `Bearer ${token}`, ...(opts.body ? { "content-type": "application/json" } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  let data = null;
+  try { data = await res.json(); } catch {}
+  if (res.status === 401) {
+    setToken("");
+    showSignin("That admin token was not accepted. Paste it again.");
+    throw new Unauthorized((data && data.error) || "admin token required");
+  }
+  if (!res.ok) throw new Error((data && data.error) || `${res.status} ${res.statusText}`);
+  return data;
+}
+const errText = (e) => e instanceof TypeError ? "Can't reach the market server. Is it running?" : e.message;
+
+// ---------------------------------------------------------------- payment mode
+async function loadConfig() {
+  try {
+    const r = await fetch("/api/config");
+    const c = await r.json();
+    const p = c.provider || {};
+    const test = p.mode === "test";
+    $("pay").innerHTML = `<span class="dot on"></span><span>${esc(p.name || p.id || "Payments")}</span>${test ? '<span class="testbadge" title="Test mode: no real money moves">TEST</span>' : ""}`;
+    $("pay").title = test ? "Test-mode keys: holds use Stripe test cards, no real money moves" : "Live payments";
+  } catch {
+    $("pay").innerHTML = `<span class="dot"></span><span>Payments: unavailable</span>`;
+  }
+}
+
+// ---------------------------------------------------------------- live updates
+let lastFetch = 0, pending;
+function scheduleRefresh() {
+  if (!token || pending) return;
+  const wait = Math.max(0, 1200 - (Date.now() - lastFetch));
+  pending = setTimeout(() => { pending = undefined; refresh(); }, wait);
+}
+function connect() {
+  if (es) return;
+  try {
+    es = new EventSource("/events");
+    es.onmessage = scheduleRefresh;
+  } catch {}
+}
+async function refresh() {
+  if (!token) return;
+  lastFetch = Date.now();
+  try {
+    products = await api("/api/admin/products");
+    $("listErr").textContent = "";
+    showApp();
+    render();
+  } catch (e) {
+    if (!(e instanceof Unauthorized)) $("listErr").textContent = `Couldn't load products: ${errText(e)}`;
+  }
+}
+
+// ---------------------------------------------------------------- render
+// products without an image: a soft gradient from the item's hue with its initial
+const initial = (t) => (String(t || "").trim().match(/[\p{L}\p{N}]/u) || ["?"])[0].toUpperCase();
+function placeholder(it, cls = "art") {
+  const h = Number(it.hue) || 0;
+  return `<svg class="${cls}" viewBox="0 0 100 100" role="img" aria-label="${esc(it.name)}" style="background:linear-gradient(135deg,hsl(${h} 70% 90%),hsl(${(h + 40) % 360} 55% 76%))">
+    <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="42" font-weight="600" font-family="system-ui, sans-serif" fill="hsl(${h} 35% 30%)">${esc(initial(it.name))}</text></svg>`;
+}
+const art = (p) => p.image ? `<img class="art" src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy">` : placeholder(p);
+// a broken image URL falls back to the placeholder
+document.addEventListener("error", (e) => {
+  const img = e.target;
+  if (!(img instanceof HTMLImageElement) || !img.classList.contains("art")) return;
+  const p = products.find((x) => x.id === img.closest(".prod")?.dataset.id);
+  img.outerHTML = placeholder(p || { hue: 0, name: "?" });
+}, true);
+
+function holdStats(holds) {
+  const s = { held: 0, captured: 0, released: 0, refunded: 0, heldAmt: 0, capAmt: 0, refAmt: 0 };
+  for (const h of holds || []) {
+    if (s[h.status] !== undefined) s[h.status]++;
+    if (h.status === "held") s.heldAmt += +h.amount || 0;
+    s.capAmt += +h.captured || 0;
+    s.refAmt += +h.refunded || 0;
+  }
+  return s;
+}
+
+const editing = new Map();   // product id -> draft description
+const busy = new Set();       // product ids with a request in flight
+const cardErr = new Map();    // product id -> last error
+
+function priceFacts(p) {
+  const f = [];
+  f.push(`<span>Price <strong>${usd(p.ask)}</strong></span>`);
+  if (p.kind === "unique") f.push(`<span>Floor <strong>${usd(p.floor)}</strong><span class="priv">private</span></span>`);
+  else if (p.guarantee) f.push(`<span>Guarantee <strong>${esc(p.guarantee)}</strong></span>`);
+  if (p.status === "listed" && p.mechanism === "dutch" && p.price != null) f.push(`<span>Dutch price now <strong>${usd(p.price)}</strong></span>`);
+  if (p.status === "listed" && p.mechanism === "auction" && p.auction && !p.auction.closed) {
+    const a = p.auction;
+    const ends = new Date(a.endsAt);
+    f.push(`<span>${esc(a.bids)} bid${a.bids === 1 ? "" : "s"}${a.leader ? `, leader <strong>${esc(a.leader)}</strong>` : ""}${a.price != null ? ` at <strong>${usd(a.price)}</strong>` : a.bids ? " (below floor)" : ""}${isNaN(ends) ? "" : `, ends ${esc(ends.toLocaleTimeString())}`}</span>`);
+  }
+  const w = (p.watchers || []).length;
+  if (w) f.push(`<span>${w} watching</span>`);
+  return f.join("");
+}
+
+function card(p) {
+  const s = holdStats(p.holds);
+  const listed = p.status === "listed";
+  const isBusy = busy.has(p.id);
+  const statusBadge = listed ? `<span class="badge live">Listed</span>` : p.status === "sold" ? `<span class="badge sold">Sold</span>` : `<span class="badge unsold">${esc(p.status === "unsold" ? "Not listed" : p.status)}</span>`;
+  const chip = (st, n) => `<span class="chip ${st}${n ? "" : " zero"}">${n} ${st}</span>`;
+  const draft = editing.get(p.id);
+  const goalCtl = p.kind === "unique" && listed ? `
+      <span id="goal-${esc(p.id)}">Goal</span>
+      <div class="seg" role="group" aria-labelledby="goal-${esc(p.id)}">
+        <button type="button" data-act="goal" data-goal="best-price" aria-pressed="${p.goal === "best-price"}" ${isBusy ? "disabled" : ""}>Best price</button>
+        <button type="button" data-act="goal" data-goal="quick-sale" aria-pressed="${p.goal === "quick-sale"}" ${isBusy ? "disabled" : ""}>Quick sale</button>
+      </div>` : p.kind === "unique" ? `<span>Goal: ${esc(p.goal === "quick-sale" ? "quick sale" : "best price")}</span>` : "";
+  return `<article class="prod${listed ? "" : " off"}" data-id="${esc(p.id)}" aria-labelledby="t-${esc(p.id)}">
+    <div class="artcol">${art(p)}</div>
+    <div class="body">
+      <div class="title">
+        <h3 id="t-${esc(p.id)}">${esc(p.name)}</h3>
+        ${statusBadge}
+        <span class="badge">${esc(KIND[p.kind] || p.kind)}</span>
+        ${p.mechanism ? `<span class="badge">${esc(MECH[p.mechanism] || p.mechanism)}</span>` : ""}
+      </div>
+      <div class="facts">${priceFacts(p)}</div>
+      ${p.reason ? `<div class="reason"><span class="rl">Seller agent${listed && p.mechanism ? ` · ${esc(MECH[p.mechanism] || p.mechanism)}` : ""}</span>${esc(p.reason)}</div>` : ""}
+      ${p.status === "sold" ? `<div class="sold">Sold to ${esc(p.soldTo)} for ${usd(p.soldFor)}</div>` : ""}
+      ${draft !== undefined ? `<div class="editbox">
+          <label class="sr" for="d-${esc(p.id)}">Description for ${esc(p.name)}</label>
+          <textarea id="d-${esc(p.id)}" data-act="draft" maxlength="600">${esc(draft)}</textarea>
+          <div class="row"><button class="btn small" type="button" data-act="save" ${isBusy ? "disabled" : ""}>Save description</button><button class="btn ghost small" type="button" data-act="cancel">Cancel</button></div>
+        </div>` : p.description ? `<p class="desc">${esc(p.description)}</p>` : ""}
+      <div class="holds" aria-label="Holds">
+        <span class="lbl">Holds</span>
+        ${chip("held", s.held)}${chip("captured", s.captured)}${chip("released", s.released)}${chip("refunded", s.refunded)}
+        <span class="muted">· captured ${usd(s.capAmt)}${s.refAmt ? `, refunded ${usd(s.refAmt)}` : ""}${s.held ? `, ${usd(s.heldAmt)} on hold` : ""}</span>
+      </div>
+      <div class="err">${esc(cardErr.get(p.id) || "")}</div>
+      <div class="ctl">
+        ${goalCtl}
+        <span class="sp"></span>
+        ${draft === undefined ? `<button class="btn ghost small" type="button" data-act="edit">Edit description</button>` : ""}
+        ${listed ? `<button class="btn danger small" type="button" data-act="delist" ${isBusy ? "disabled" : ""}>Take down</button>` : ""}
+      </div>
+    </div>
+  </article>`;
+}
+
+const rendered = new Map();
+function render() {
+  const list = $("list");
+  if (!products.length) {
+    list.innerHTML = `<div class="empty">No products yet. Add one with the form; the seller agent lists it straight away.</div>`;
+    rendered.clear();
+  } else {
+    list.querySelector(".empty")?.remove();
+    const ids = new Set(products.map((p) => p.id));
+    for (const [id, el] of rendered) if (!ids.has(id)) { el.remove(); rendered.delete(id); }
+    // newest first
+    [...products].reverse().forEach((p, i) => {
+      const html = card(p);
+      let el = rendered.get(p.id);
+      const active = el && editing.has(p.id) && el.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA";
+      if (!el) {
+        const t = document.createElement("template");
+        t.innerHTML = html.trim();
+        el = t.content.firstElementChild;
+        el._html = html;
+        rendered.set(p.id, el);
+      } else if (el._html !== html && !active) {
+        const t = document.createElement("template");
+        t.innerHTML = html.trim();
+        const fresh = t.content.firstElementChild;
+        fresh._html = html;
+        const hadFocus = el.contains(document.activeElement) ? document.activeElement.dataset.act + (document.activeElement.dataset.goal || "") : null;
+        el.replaceWith(fresh);
+        rendered.set(p.id, fresh);
+        el = fresh;
+        if (hadFocus) {
+          const again = [...el.querySelectorAll("[data-act]")].find((b) => b.dataset.act + (b.dataset.goal || "") === hadFocus);
+          again?.focus();
+        }
+      }
+      if (list.children[i] !== el) list.insertBefore(el, list.children[i] || null);
+    });
+  }
+  const listed = products.filter((p) => p.status === "listed").length;
+  const sold = products.filter((p) => p.status === "sold").length;
+  let held = 0, cap = 0;
+  for (const p of products) { const s = holdStats(p.holds); held += s.heldAmt; cap += s.capAmt - s.refAmt; }
+  $("kListed").textContent = listed;
+  $("kSold").textContent = sold;
+  $("kHeld").textContent = usd(held);
+  $("kCap").textContent = usd(cap);
+  $("listMeta").textContent = products.length ? `${products.length} product${products.length === 1 ? "" : "s"} · updates live` : "";
+}
+
+// ---------------------------------------------------------------- product actions
+async function act(id, fn) {
+  busy.add(id); cardErr.delete(id); render();
+  try { await fn(); }
+  catch (e) {
+    if (!(e instanceof Unauthorized)) {
+      const msg = errText(e);
+      cardErr.set(id, msg);
+      setTimeout(() => { if (cardErr.get(id) === msg) { cardErr.delete(id); render(); } }, 10000);
+    }
+  }
+  finally { busy.delete(id); await refresh(); }
+}
+$("list").addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.dataset.act === "draft") editing.set(t.closest(".prod").dataset.id, t.value);
+});
+$("list").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const id = b.closest(".prod").dataset.id;
+  const p = products.find((x) => x.id === id);
+  if (!p) return;
+  const path = `/api/admin/products/${encodeURIComponent(id)}`;
+  switch (b.dataset.act) {
+    case "goal":
+      if (b.dataset.goal !== p.goal) act(id, () => api(path, { method: "POST", body: { goal: b.dataset.goal } }));
+      break;
+    case "delist":
+      if (confirm(`Take down "${p.name}"? Any open holds on it are released and buyers can no longer offer, bid or buy.`)) {
+        act(id, () => api(`${path}/delist`, { method: "POST" }));
+      }
+      break;
+    case "edit":
+      editing.set(id, p.description || "");
+      cardErr.delete(id);
+      render();
+      document.getElementById(`d-${id}`)?.focus();
+      break;
+    case "cancel":
+      editing.delete(id);
+      render();
+      break;
+    case "save": {
+      const text = editing.get(id) ?? "";
+      act(id, async () => { await api(path, { method: "POST", body: { description: text } }); editing.delete(id); });
+      break;
+    }
+  }
+});
+
+// ---------------------------------------------------------------- add product form
+const MAX_IMAGE = 4_000_000;
+let imageData = "";   // data: URL from the file input
+const form = $("addForm");
+const kind = () => form.querySelector("input[name=kind]:checked").value;
+function syncKind() {
+  const k = kind();
+  $("uniqueOpts").hidden = k !== "unique";
+  $("fixedOpts").hidden = k === "unique";
+  $("fDays").placeholder = k === "physical" ? "14" : "7";
+  syncFloor();
+}
+function syncFloor() {
+  const ask = parseFloat($("fAsk").value);
+  $("fFloor").placeholder = ask > 0 ? `${num(Math.round(ask * 0.6))} (60% of price)` : "60% of price";
+}
+form.querySelectorAll("input[name=kind]").forEach((r) => r.addEventListener("change", syncKind));
+$("fAsk").addEventListener("input", syncFloor);
+
+function showPreview(src) {
+  $("imgRow").hidden = !src;
+  if (src) $("imgPreview").src = src; else $("imgPreview").removeAttribute("src");
+}
+$("fFile").addEventListener("change", () => {
+  const f = $("fFile").files[0];
+  $("addErr").textContent = "";
+  imageData = "";
+  if (!f) { showPreview($("fImgUrl").value.trim()); return; }
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(f.type)) { $("addErr").textContent = "Image must be PNG, JPEG, WebP or GIF."; $("fFile").value = ""; showPreview(""); return; }
+  if (f.size > MAX_IMAGE) { $("addErr").textContent = `That image is ${(f.size / 1e6).toFixed(1)} MB; the limit is 4 MB.`; $("fFile").value = ""; showPreview(""); return; }
+  const rd = new FileReader();
+  rd.onload = () => { imageData = String(rd.result); $("fImgUrl").value = ""; showPreview(imageData); };
+  rd.onerror = () => { $("addErr").textContent = "Couldn't read that file."; };
+  rd.readAsDataURL(f);
+});
+$("fImgUrl").addEventListener("input", () => {
+  const u = $("fImgUrl").value.trim();
+  if (u) { imageData = ""; $("fFile").value = ""; }
+  showPreview(/^https?:\/\/\S+$/.test(u) ? u : imageData);
+});
+$("imgPreview").addEventListener("error", () => { if (!imageData && $("imgPreview").getAttribute("src")) $("imgRow").hidden = true; });
+$("imgClear").addEventListener("click", () => { imageData = ""; $("fFile").value = ""; $("fImgUrl").value = ""; showPreview(""); });
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("addErr").textContent = ""; $("addOk").textContent = "";
+  const name = $("fName").value.trim();
+  const ask = parseFloat($("fAsk").value);
+  if (!name) { $("addErr").textContent = "Give the product a name."; $("fName").focus(); return; }
+  if (!(ask > 0)) { $("addErr").textContent = "Enter a price above 0."; $("fAsk").focus(); return; }
+  const k = kind();
+  const body = { name, ask, kind: k };
+  const desc = $("fDesc").value.trim();
+  if (desc) body.description = desc;
+  if (k === "unique") {
+    const fl = $("fFloor").value.trim();
+    if (fl !== "") {
+      const floor = parseFloat(fl);
+      if (!(floor > 0)) { $("addErr").textContent = "The floor must be a positive price."; $("fFloor").focus(); return; }
+      if (floor > ask) { $("addErr").textContent = "The floor can't be above the price."; $("fFloor").focus(); return; }
+      body.floor = floor;
+    }
+    body.goal = form.querySelector("input[name=goal]:checked").value;
+  } else {
+    const d = $("fDays").value.trim();
+    if (d !== "") {
+      const days = parseFloat(d);
+      if (!(days > 0)) { $("addErr").textContent = "Guarantee days must be a positive number."; $("fDays").focus(); return; }
+      body.guaranteeDays = days;
+    }
+  }
+  const url = $("fImgUrl").value.trim();
+  if (imageData) body.image = imageData;
+  else if (url) {
+    if (!/^https?:\/\/\S+$/.test(url)) { $("addErr").textContent = "The image URL must start with http:// or https://."; $("fImgUrl").focus(); return; }
+    body.image = url;
+  }
+  $("addBtn").disabled = true; $("addBtn").textContent = "Listing…";
+  try {
+    const p = await api("/api/admin/products", { method: "POST", body });
+    $("addOk").textContent = `Listed ${p.name}${p.mechanism ? ` as ${MECH[p.mechanism] || p.mechanism}` : ""}.`;
+    form.reset();
+    imageData = ""; showPreview(""); syncKind();
+    await refresh();
+  } catch (e2) {
+    if (!(e2 instanceof Unauthorized)) $("addErr").textContent = errText(e2);
+  } finally {
+    $("addBtn").disabled = false; $("addBtn").textContent = "List product";
+  }
+});
+
+// ---------------------------------------------------------------- start
+syncKind();
+loadConfig();
+connect();
+if (token) { showApp(); refresh(); } else showSignin("");
+</script>
+</body>
+</html>

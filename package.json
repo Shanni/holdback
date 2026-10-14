@@ -4,16 +4,17 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "start": "node demo/market/server.mts",
-    "seed:store": "node demo/market/seed-store.mts",
-    "test": "node --test demo/mechanism.test.mts demo/market/negotiation.test.mts demo/market/payments.test.mts",
-    "test:mcp": "node mcp/test.mts",
+    "start": "node --disable-warning=ExperimentalWarning demo/market/server.mts",
+    "test": "node --test demo/mechanism.test.mts demo/market/negotiation.test.mts",
+    "test:stripe": "node --test demo/market/payments.test.mts",
+    "test:mcp": "node --disable-warning=ExperimentalWarning mcp/test.mts",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "shopify:assets": "cp demo/public/holdback.js demo/public/store/extension/assets/holdback.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "stripe": "22.6.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
