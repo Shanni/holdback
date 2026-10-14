@@ -62,7 +62,7 @@ test("floor is respected by every counter", () => {
 });
 
 test("buyer opens at ~55% of ask, capped by max", () => {
-  assert.deepEqual(buyerNext({ ask: 100, max: 60 }), { action: "offer", amount: 55, message: "Would you take 55 dUSDC?" });
+  assert.deepEqual(buyerNext({ ask: 100, max: 60 }), { action: "offer", amount: 55, message: "Would you take 55 USD?" });
   assert.equal((buyerNext({ ask: 100, max: 40 }) as any).amount, 40);
 });
 
@@ -123,7 +123,7 @@ test("readMessage: detects hardship, enthusiasm, bundle, first purchase, rude, q
   assert.deepEqual(intents("I love this one"), ["enthusiasm"]);
   assert.deepEqual(intents("Would you do a bundle?"), ["bundle"]);
   assert.deepEqual(intents("I'd take both"), ["bundle"]);
-  assert.deepEqual(intents("This is my first NFT"), ["first_purchase"]);
+  assert.deepEqual(intents("This is my first print"), ["first_purchase"]);
   assert.deepEqual(intents("I'm new here"), ["first_purchase"]);
   assert.deepEqual(intents("this price is a ripoff, idiot"), ["rude"]);
   assert.deepEqual(intents("Who made this?"), ["question"]);
@@ -132,12 +132,12 @@ test("readMessage: detects hardship, enthusiasm, bundle, first purchase, rude, q
 });
 
 test("readMessage: neutral text, empty input and the scripted agents' lines detect nothing", () => {
-  for (const t of ["", "hello", "Would you take 55 dUSDC?", "I can stretch to 58 dUSDC.", "60 works for me. Deal.", "66 is above my owner's limit. I'll pass.", "fantastic", "defend"])
+  for (const t of ["", "hello", "Would you take 55 USD?", "I can stretch to 58 USD.", "60 works for me. Deal.", "66 is above my owner's limit. I'll pass.", "fantastic", "defend"])
     assert.deepEqual(intents(t), [], t);
   assert.deepEqual(readMessage(undefined).intents, []);
 });
 
-const m3 = { ask: 100, floor: 60, goal: "best-price" as const, item: { name: "Monkey #3", kind: "nft" as const } };
+const m3 = { ask: 100, floor: 60, goal: "best-price" as const, item: { name: "Monkey #3", kind: "unique" as const } };
 
 test("hardship concedes a little faster; enthusiasm holds firmer; rude gets no concession", () => {
   const plain = sellerReply({ ...m3, offer: 70, round: 1 }).amount;                                      // 91
@@ -155,34 +155,34 @@ test("hardship concedes a little faster; enthusiasm holds firmer; rude gets no c
 test("replies reference the message and still state the number", () => {
   const hard = sellerReply({ ...m3, offer: 70, round: 1, message: "I'm a student" });
   assert.match(hard.message, /student/);
-  assert.ok(hard.message.includes(`${hard.amount} dUSDC`));
+  assert.ok(hard.message.includes(`${hard.amount} USD`));
   const q = sellerReply({ ...m3, offer: 70, round: 1, message: "Who made this? Is it rare?" });
   assert.match(q.message, /Monkey #3/);
   assert.match(q.message, /1\/1/);
-  assert.match(q.message, /escrow/);
-  assert.ok(q.message.includes(`${q.amount} dUSDC`));
+  assert.match(q.message, /authorized/);
+  assert.ok(q.message.includes(`${q.amount} USD`));
   const g = sellerReply({ ...m3, item: { name: "Print", kind: "digital", guarantee: "7 days" }, offer: 70, round: 1, message: "is there a guarantee?" });
   assert.match(g.message, /7 days money-back guarantee/);
   const dec = sellerReply({ ...m3, offer: 40, round: 1, message: "I'm broke" });
   assert.equal(dec.action, "decline");
   assert.match(dec.message, /money being tight/);
-  assert.match(dec.message, /100 dUSDC/);
+  assert.match(dec.message, /100 USD/);
   const acc = sellerReply({ ...m3, offer: 100, round: 1, message: "Huge fan!" });
   assert.equal(acc.action, "accept");
-  assert.match(acc.message, /fan.*Deal at 100 dUSDC/);
+  assert.match(acc.message, /fan.*Deal at 100 USD/);
   // sentence count stays small (1–2 sentences, the fact line is one sentence)
   for (const r of [hard, q, dec, acc]) assert.ok(r.message.split(/(?<=[.?!])\s+/).length <= 3, r.message);
 });
 
 test("templates vary across messages", () => {
   const msgs = ["I'm a student", "student budget here", "As a student I can't stretch", "student, sorry", "I'm on a student loan"];
-  const texts = new Set(msgs.map((message) => sellerReply({ ...m3, offer: 70, round: 1, message }).message.replace(/\d+ dUSDC.*/, "")));
+  const texts = new Set(msgs.map((message) => sellerReply({ ...m3, offer: 70, round: 1, message }).message.replace(/\d+ USD.*/, "")));
   assert.ok(texts.size >= 2, [...texts].join(" | "));
 });
 
 test("no message, or nothing recognised: replies are unchanged", () => {
   const a = sellerReply({ ...m3, offer: 70, round: 1 });
-  const b = sellerReply({ ...m3, offer: 70, round: 1, message: "I can stretch to 70 dUSDC." });
+  const b = sellerReply({ ...m3, offer: 70, round: 1, message: "I can stretch to 70 USD." });
   assert.deepEqual(a, b);
   assert.equal(a.read, undefined);
 });
@@ -202,11 +202,11 @@ test("messages never push any price below the floor (exhaustive sweep)", () => {
 });
 
 test("sellerNote: accept / walk-away replies reference the message", () => {
-  assert.deepEqual(sellerNote(undefined, "accept", 80), { message: "Deal at 80 dUSDC. The NFT is yours.", read: [] });
-  const a = sellerNote("my first NFT!", "accept", 80);
+  assert.deepEqual(sellerNote(undefined, "accept", 80), { message: "Deal at 80 USD. It's yours.", read: [] });
+  const a = sellerNote("my first purchase!", "accept", 80);
   assert.match(a.message, /first/i);
-  assert.match(a.message, /80 dUSDC/);
+  assert.match(a.message, /80 USD/);
   const w = sellerNote("can't afford it, sorry", "walk_away", 87);
   assert.match(w.message, /money being tight/);
-  assert.match(w.message, /87 dUSDC stands/);
+  assert.match(w.message, /87 USD stands/);
 });

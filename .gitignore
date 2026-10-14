@@ -1,11 +1,11 @@
-.anchor
 .DS_Store
-target
-**/*.rs.bk
 node_modules
-test-ledger
-.yarn
 .keys
 demo/video/*.mp4
 demo/public/store/extension/assets/holdback.js
-demo/video/pitch/*.mp3
+
+# local leftovers from the crypto branch (build output, deployer keys)
+/tempo/
+/target/
+/.anchor/
+/test-ledger/

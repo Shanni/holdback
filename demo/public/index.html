@@ -108,8 +108,7 @@
   .badge.sold { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
   .badge.live { background: var(--held-bg); color: var(--held); border-color: var(--held-line); }
   .badge.kind { font-size: 11px; padding: 0 6px; line-height: 18px; color: var(--muted); }
-  .tx { color: var(--muted); font-size: 12px; white-space: nowrap; text-decoration: none; }
-  .tx:hover { color: var(--focus); text-decoration: underline; }
+  .hr { color: var(--muted); font: 12px var(--mono); white-space: nowrap; }
   .price { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
   .price strong { color: var(--ink); font-weight: 600; }
   .reason { margin: 0 0 12px; padding: 10px 12px; background: var(--agent); border: 1px solid var(--agent-line); border-radius: var(--r-md); font-size: 13px; color: var(--ink-2); }
@@ -148,6 +147,7 @@
   .held { background: var(--held-bg); color: var(--held); border-color: var(--held-line); }
   .captured { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
   .refunded { background: var(--ref-bg); color: var(--ref); border-color: var(--ref-line); }
+  .released { background: var(--sunken); color: var(--muted); border-color: var(--line-strong); }
 
   /* side panels */
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); min-width: 0; }
@@ -186,20 +186,20 @@
   .err { margin-top: 10px; padding: 8px 10px; border-radius: var(--r-md); background: var(--err-bg); border: 1px solid var(--err-line); color: var(--err); font-size: 13px; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .hint:empty { display: none; }
-  .wallets { display: grid; grid-template-columns: minmax(0, 1fr) auto; font-size: 13px; }
-  .wallets > span { padding: 7px 16px; border-top: 1px solid var(--line); }
-  .wallets > span:nth-child(-n+2) { border-top: 0; }
-  .wallets > span:nth-child(even) { text-align: right; font-weight: 500; }
-  .wallets .nm { display: flex; gap: 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
-  .wallets .me { font-weight: 600; }
+  .accts { display: grid; grid-template-columns: minmax(0, 1fr) auto; font-size: 13px; }
+  .accts > span { padding: 7px 16px; border-top: 1px solid var(--line); }
+  .accts > span:nth-child(-n+2) { border-top: 0; }
+  .accts > span:nth-child(even) { text-align: right; font-weight: 500; }
+  .accts .nm { display: flex; gap: 6px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+  .accts .nm .cardlbl { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .accts .me { font-weight: 600; }
   .log { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow: auto; font-size: 13px; }
   .log li { padding: 8px 16px; border-top: 1px solid var(--line); overflow-wrap: anywhere; color: var(--ink-2); }
   .log li:first-child { border-top: 0; }
   .log .t { color: var(--muted); font-size: 12px; margin-right: 8px; }
   .log .who { font-weight: 600; color: var(--ink); margin-right: 4px; }
-  .log a { color: var(--muted); font-size: 12px; margin-left: 6px; }
   .empty { color: var(--muted); font-size: 13px; }
-  .wallets .empty, .log .empty { padding: 10px 16px; }
+  .accts .empty, .log .empty { padding: 10px 16px; }
 
   /* view tabs + holds ledger */
   .vtabs { display: flex; gap: 18px; align-items: baseline; }
@@ -228,13 +228,12 @@
   [data-skin="bright"] .lfilters select { border-color: var(--ink); }
 
   footer.wrap { padding-bottom: 40px; }
-  .rails { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-  .rail { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; font-size: 13px; text-decoration: none; display: grid; gap: 2px; }
-  a.rail:hover { border-color: var(--focus); }
-  .rail .rn { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .rail .st { font-size: 11px; font-weight: 500; padding: 0 6px; line-height: 18px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); color: var(--muted); text-transform: capitalize; }
-  .rail .st.live { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
-  .rail .rd { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .provs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .prov { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; font-size: 13px; display: grid; gap: 2px; }
+  .prov .rn { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .prov .st { font-size: 11px; font-weight: 500; padding: 0 6px; line-height: 18px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); color: var(--muted); text-transform: capitalize; }
+  .prov .st.live { background: var(--cap-bg); color: var(--cap); border-color: var(--cap-line); }
+  .prov .rd { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 
   /* Bright skin: one bright band colour, square hairline boxes, pill controls, thin display serif */
   :root[data-skin="bright"] {
@@ -297,9 +296,8 @@
   [data-skin="bright"] .chip.held { --dot: var(--held); }
   [data-skin="bright"] .chip.captured { --dot: var(--cap); }
   [data-skin="bright"] .chip.refunded { --dot: var(--ref); }
-  [data-skin="bright"] .rail .st.live { background: var(--band); color: #000; border-color: transparent; }
-  [data-skin="bright"] a.rail:hover { border-color: var(--ink); }
-  [data-skin="bright"] .tx:hover { color: var(--ink); }
+  [data-skin="bright"] .chip.released { --dot: var(--muted); }
+  [data-skin="bright"] .prov .st.live { background: var(--band); color: #000; border-color: transparent; }
   [data-skin="bright"] .row input:focus, [data-skin="bright"] .msgbox input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px var(--agent); }
   @media (max-width: 720px) {
     [data-skin="bright"] h1 { font-size: 40px; }
@@ -352,10 +350,10 @@
 </header>
 <div class="band"><section class="wrap pagehead">
   <div>
-    <h1>Escrowed sales</h1>
-    <p>A seller agent sells monkey NFTs to buyer agents and to you. It picks offers, an auction, a falling price or buy-now from demand. Every offer, bid and purchase is an on-chain hold: captured when the deal clears, refunded otherwise.</p>
+    <h1>Sales on hold</h1>
+    <p>A seller agent sells one-of-a-kind monkey artworks to buyer agents and to you. It picks offers, an auction, a falling price or buy-now from demand. Every offer, bid and purchase is a hold on the buyer's card: captured when the deal clears, released otherwise, so nobody is charged for a deal that doesn't happen.</p>
   </div>
-  <div class="ledger" id="kpis" aria-label="Escrow totals"></div>
+  <div class="ledger" id="kpis" aria-label="Hold totals"></div>
 </section></div>
 <main class="wrap">
   <section>
@@ -363,7 +361,7 @@
     <div class="listings" id="listings"><div class="empty">Waiting for the market…</div></div>
     <div id="ledgerView" hidden>
       <div class="lfilters">
-        <span class="seg" role="group" aria-label="Status" id="lStatus"><button type="button" data-st="" class="on">All</button><button type="button" data-st="held">Held</button><button type="button" data-st="captured">Captured</button><button type="button" data-st="refunded">Refunded</button></span>
+        <span class="seg" role="group" aria-label="Status" id="lStatus"><button type="button" data-st="" class="on">All</button><button type="button" data-st="held">Held</button><button type="button" data-st="captured">Captured</button><button type="button" data-st="released">Released</button><button type="button" data-st="refunded">Refunded</button></span>
         <select id="lBuyer" aria-label="Buyer"></select>
         <select id="lItem" aria-label="Item"></select>
         <select id="lKind" aria-label="Type"><option value="">All types</option><option value="offer">Offers</option><option value="bid">Bids</option><option value="buy">Purchases</option></select>
@@ -374,9 +372,9 @@
   </section>
   <aside>
     <div class="panel you" id="you">
-      <h3>Buyer console <small>Your demo wallet</small></h3>
+      <h3>Buyer console <small id="meCard">Your demo card</small></h3>
       <div class="pbody">
-        <div class="me-line"><span id="meName" class="muted">Creating your wallet…</span><span><span class="bal" id="meBal">–</span> <span class="muted">dUSDC</span></span></div>
+        <div class="me-line"><span id="meName" class="muted">Issuing your demo card…</span><span><span class="bal" id="meBal">–</span> <span class="muted">USD available</span></span></div>
         <div class="selitem" id="selItem"><span class="muted">Select a listing to trade on it.</span></div>
         <div class="hint" id="hint"></div>
         <div class="grp">
@@ -407,13 +405,13 @@
         <div id="myHolds"><div class="empty">None yet.</div></div>
       </div>
     </div>
-    <div class="panel"><h3>Wallets <small>dUSDC</small></h3><div class="wallets" id="wallets"></div></div>
+    <div class="panel"><h3>Buyers <small>available credit · USD</small></h3><div class="accts" id="accts"></div></div>
     <div class="panel"><h3>Activity</h3><ul class="log" id="log"></ul></div>
   </aside>
 </main>
 <footer class="wrap">
-  <div class="colhead"><h2>Settlement rails</h2></div>
-  <div class="rails" id="rails"></div>
+  <div class="colhead"><h2>Payments</h2></div>
+  <div class="provs" id="provider"></div>
 </footer>
 <script>
 "use strict";
@@ -455,14 +453,10 @@ function monkey(hue, cls = "art") {
 }
 const art = (it, cls = "art") => it.image ? `<img class="${cls}" src="${esc(it.image)}" alt="${esc(it.name)}">` : monkey(it.hue, cls);
 
-function txUrl(tx) {
-  if (!tx) return "";
-  if (/^https?:\/\//i.test(tx)) return tx;
-  const c = (S && S.cluster) || "devnet";
-  const q = /mainnet/.test(c) ? "" : /devnet|testnet/.test(c) ? `?cluster=${c}` : "?cluster=custom";
-  return `https://explorer.solana.com/tx/${encodeURIComponent(tx)}${q}`;
-}
-const txLink = (tx, label = "tx ↗") => tx ? `<a class="tx" href="${esc(txUrl(tx))}" target="_blank" rel="noopener">${label}</a>` : "";
+// processor reference (authorization id), shown as plain text
+const holdRef = (h) => h && h.ref ? `<span class="hr" title="Payment processor reference">${esc(h.ref)}</span>` : "";
+const refundable = (h) => !!h && h.status === "captured" && !!h.refundableUntil && Date.parse(h.refundableUntil) > Date.now();
+const fmtDate = (iso) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""; };
 const chip = (st) => `<span class="chip ${esc(st)}">${esc(st)}</span>`;
 const isMine = (h) => !!me && (h.buyer === me.id || h.buyer === me.name);
 const buyerByKey = (k) => S && (S.buyers || []).find((b) => b.id === k || b.name === k);
@@ -480,7 +474,7 @@ function amountCell(h) {
 }
 
 function mechBadge(it) {
-  if (it.status === "sold") return `<span class="badge sold">Sold · ${fmt(it.soldFor)} dUSDC${it.soldTo ? ` · ${esc(displayName(it.soldTo))}` : ""}</span>${txLink(it.saleTx)}`;
+  if (it.status === "sold") return `<span class="badge sold">Sold · ${fmt(it.soldFor)} USD${it.soldTo ? ` · ${esc(displayName(it.soldTo))}` : ""}</span>`;
   if (it.status === "unsold") return `<span class="badge">Unsold</span>`;
   switch (it.mechanism) {
     case "auction": return it.auction && it.auction.closed ? `<span class="badge">Auction closed</span>` : `<span class="badge live">Auction · <span class="cd" data-ends="${esc(it.auction && it.auction.endsAt)}"></span></span>`;
@@ -494,15 +488,15 @@ function mechBadge(it) {
 function priceLine(it) {
   const w = (it.watchers || []).length;
   const watch = w ? ` · ${w} watching` : "";
-  if (it.status === "sold") return `Asked <strong>${fmt(it.ask)}</strong> · sold for <strong>${fmt(it.soldFor)}</strong> dUSDC${it.guarantee ? ` · payment releases after the ${esc(it.guarantee)} guarantee unless the buyer reclaims` : ""}`;
+  if (it.status === "sold") return `Asked <strong>${fmt(it.ask)}</strong> · sold for <strong>${fmt(it.soldFor)}</strong> USD${it.guarantee ? ` · the buyer can refund it within the ${esc(it.guarantee)} guarantee` : ""}`;
   switch (it.mechanism) {
-    case "buy-now": return `Buy now: <strong>${fmt(it.price ?? it.ask)}</strong> dUSDC${watch}`;
-    case "offers": return `Asking <strong>${fmt(it.ask)}</strong> dUSDC · make an offer (the seller agent counters) or buy at ask${watch}`;
+    case "buy-now": return `Buy now: <strong>${fmt(it.price ?? it.ask)}</strong> USD${watch}`;
+    case "offers": return `Asking <strong>${fmt(it.ask)}</strong> USD · make an offer (the seller agent counters) or buy at ask${watch}`;
     case "auction": {
       const a = it.auction || {};
       return `Ask <strong>${fmt(it.ask)}</strong>${a.price != null ? ` · now <strong>${fmt(a.price)}</strong>` : ""} · ${a.bids || 0} bid${a.bids === 1 ? "" : "s"}${a.leader ? ` · leading: ${esc(displayName(a.leader))}` : ""} · reserve ${a.reserveMet ? "met" : "not met"}${watch}`;
     }
-    case "dutch": return `Started at <strong>${fmt(it.ask)}</strong> · now <strong>${fmt(it.price)}</strong> dUSDC and falling${watch}`;
+    case "dutch": return `Started at <strong>${fmt(it.ask)}</strong> · now <strong>${fmt(it.price)}</strong> USD and falling${watch}`;
     default: return `Ask <strong>${fmt(it.ask)}</strong>${watch}`;
   }
 }
@@ -523,7 +517,7 @@ function threads(it) {
       return turnHTML(t, who, c);
     }).join("");
     const deal = it.status === "sold" && it.soldTo != null && displayName(it.soldTo) === who
-      ? `<div class="deal">Deal closed at ${fmt(it.soldFor)} dUSDC ${txLink(it.saleTx)}</div>` : "";
+      ? `<div class="deal">Deal closed at ${fmt(it.soldFor)} USD</div>` : "";
     return `<div class="thread">${rows}${deal}</div>`;
   }).join("");
 }
@@ -549,7 +543,7 @@ function holdsTable(it) {
   return `<div class="sub">Holds</div><div class="tablewrap"><table>${hs.map((h) => `<tr>
     <td>${esc(displayName(h.buyer))}</td><td class="muted">${esc(h.kind)}</td>
     <td class="num">${amountCell(h)}</td><td>${chip(h.status)}</td>
-    <td class="r">${txLink(h.settleTx || h.tx)}</td></tr>`).join("")}</table></div>`;
+    <td class="r">${holdRef(h)}</td></tr>`).join("")}</table></div>`;
 }
 
 function cardHTML(it) {
@@ -586,26 +580,27 @@ function renderItems() {
   [...box.children].forEach((el) => { if (!seen.has(el.dataset.id)) { el.remove(); cache.delete("card:" + el.dataset.id); } });
 }
 
-// escrow totals across every listing: what is held now, what went to the seller, what went back
+// hold totals across every listing: what is authorized now, what went to the seller, what the buyers kept
 function renderKpis() {
   const items = S.items || [];
-  const sum = { held: 0, captured: 0, refunded: 0 }, n = { held: 0, captured: 0, refunded: 0 };
+  const sum = { held: 0, captured: 0, back: 0 }, n = { held: 0, captured: 0, released: 0, refunded: 0 };
   for (const it of items) for (const h of it.holds || []) {
     const amt = Number(h.amount) || 0;
     if (h.status === "held") { sum.held += amt; n.held++; }
     else if (h.status === "captured") {
       const c = h.captured != null ? Number(h.captured) : amt;
       sum.captured += c; n.captured++;
-      if (amt > c) sum.refunded += amt - c; // partial capture: the rest went back
-    } else if (h.status === "refunded") { sum.refunded += amt; n.refunded++; }
+      if (amt > c) sum.back += amt - c; // partial capture: the rest of the authorization was released
+    } else if (h.status === "released") { sum.back += amt; n.released++; }
+    else if (h.status === "refunded") { sum.back += amt; n.refunded++; }
   }
   const live = items.filter((i) => i.status === "listed").length;
   const holds = (k) => `${n[k]} hold${n[k] === 1 ? "" : "s"}`;
   const cell = (cls, label, value, unit, sub) => `<div class="kpi"><div class="kl"><i class="${cls}"></i>${label}</div><div class="kv">${value}${unit ? `<small>${unit}</small>` : ""}</div><div class="ks">${sub}</div></div>`;
   setHTML($("kpis"), [
-    cell("held", "Held in escrow", fmt(sum.held), "dUSDC", `${holds("held")} open`),
-    cell("captured", "Paid to seller", fmt(sum.captured), "dUSDC", `${holds("captured")} captured`),
-    cell("refunded", "Returned to buyers", fmt(sum.refunded), "dUSDC", `${holds("refunded")} refunded, plus partial captures`),
+    cell("held", "Held on cards", fmt(sum.held), "USD", `${holds("held")} open`),
+    cell("captured", "Paid to seller", fmt(sum.captured), "USD", `${holds("captured")} captured`),
+    cell("refunded", "Never charged or refunded", fmt(sum.back), "USD", `${n.released} released · ${n.refunded} refunded`),
     cell("live", "Live listings", String(live), "", `${items.length - live} sold or closed`),
   ].join(""));
   const cnt = `${items.length} item${items.length === 1 ? "" : "s"}`;
@@ -617,10 +612,12 @@ const LF = { st: "", buyer: "", item: "", kind: "" };
 let view = location.hash === "#ledger" ? "ledger" : "listings";
 const hhmmss = (iso) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toTimeString().slice(0, 8) : "–"; };
 function outcome(h) {
-  if (h.status === "held") return `<span class="muted">waiting for the deal</span>`;
-  if (h.status === "refunded") return `${fmt(h.amount)} back to buyer`;
+  if (h.status === "held") return `<span class="muted">authorized, waiting for the deal</span>`;
+  if (h.status === "released") return `<span class="muted">voided · never charged</span>`;
+  if (h.status === "refunded") return `${fmt(h.refunded ?? h.captured ?? h.amount)} refunded to buyer`;
   const c = h.captured != null ? h.captured : h.amount;
-  return c < h.amount ? `${fmt(c)} to seller <span class="muted">· ${fmt(h.amount - c)} back</span>` : `${fmt(c)} to seller`;
+  const until = refundable(h) ? ` <span class="muted">· refundable until ${esc(fmtDate(h.refundableUntil))}</span>` : "";
+  return c < h.amount ? `${fmt(c)} to seller <span class="muted">· ${fmt(h.amount - c)} released</span>` : `${fmt(c)} to seller${until}`;
 }
 function setOptions(sel, first, opts, val) {
   const html = `<option value="">${esc(first)}</option>` + opts.map(([v, l]) => `<option value="${esc(v)}"${v === val ? " selected" : ""}>${esc(l)}</option>`).join("");
@@ -648,9 +645,9 @@ function renderLedger() {
   }
   setHTML($("lSum"), `${shown.length} of ${rows.length} holds`);
   const kindLabel = { offer: "Offer", bid: "Bid", buy: "Purchase" };
-  setHTML($("lTable"), !rows.length ? `<div class="empty">No holds yet. Every offer, bid and purchase shows up here as an escrow hold.</div>`
+  setHTML($("lTable"), !rows.length ? `<div class="empty">No holds yet. Every offer, bid and purchase shows up here as a hold on the buyer's card.</div>`
     : !shown.length ? `<div class="empty">No holds match these filters.</div>`
-    : `<table class="ltable"><thead><tr><th>Placed</th><th>Item</th><th>Buyer</th><th>Type</th><th class="num">Held</th><th>Outcome</th><th>Status</th><th>On-chain</th></tr></thead><tbody>${shown.map(({ it, h }) => {
+    : `<table class="ltable"><thead><tr><th>Placed</th><th>Item</th><th>Buyer</th><th>Type</th><th class="num">Held</th><th>Outcome</th><th>Status</th><th>Reference</th></tr></thead><tbody>${shown.map(({ it, h }) => {
       const b = buyerByKey(h.buyer);
       return `<tr class="${isMine(h) ? "mine" : ""}"><td class="t" title="${esc(h.settledAt ? `settled ${hhmmss(h.settledAt)}` : "")}">${hhmmss(h.at)}</td>
         <td><span class="itm">${art(it, "")}<span>${esc(it.name)}</span></span></td>
@@ -659,8 +656,8 @@ function renderLedger() {
         <td class="num">${fmt(h.amount)}</td>
         <td class="out">${outcome(h)}</td>
         <td>${chip(h.status)}</td>
-        <td class="r">${txLink(h.tx, "hold ↗")}${h.settleTx ? ` · ${txLink(h.settleTx, "settle ↗")}` : ""}</td></tr>`;
-    }).join("")}</tbody><tfoot><tr><td colspan="4">Totals (filtered)</td><td class="num">${fmt(shown.reduce((s, r) => s + r.h.amount, 0))}</td><td class="out" colspan="3">${fmt(tot.toSeller)} to seller · ${fmt(tot.back)} back to buyers · ${fmt(tot.held)} still held</td></tr></tfoot></table>`);
+        <td class="r">${holdRef(h)}</td></tr>`;
+    }).join("")}</tbody><tfoot><tr><td colspan="4">Totals (filtered)</td><td class="num">${fmt(shown.reduce((s, r) => s + r.h.amount, 0))}</td><td class="out" colspan="3">${fmt(tot.toSeller)} to seller · ${fmt(tot.back)} released or refunded · ${fmt(tot.held)} still held</td></tr></tfoot></table>`);
 }
 function setView(v) {
   view = v;
@@ -681,18 +678,18 @@ $("lStatus").addEventListener("click", (e) => {
 for (const [id, k] of [["lBuyer", "buyer"], ["lItem", "item"], ["lKind", "kind"]]) $(id).addEventListener("change", (e) => { LF[k] = e.target.value; renderLedger(); });
 window.addEventListener("hashchange", () => setView(location.hash === "#ledger" ? "ledger" : "listings"));
 
-function renderWallets() {
+function renderAccounts() {
   const bs = (S.buyers || []).slice();
-  if (S.seller && S.seller.balance != null) bs.unshift({ id: "__seller", name: S.seller.name || "Seller agent", kind: "seller", balance: S.seller.balance });
-  setHTML($("wallets"), bs.length ? bs.map((b) => {
+  if (S.seller && S.seller.balance != null) bs.unshift({ id: "__seller", name: S.seller.name || "Seller agent", kind: "seller", card: "received", balance: S.seller.balance });
+  setHTML($("accts"), bs.length ? bs.map((b) => {
     const mine = me && b.id === me.id;
-    return `<span class="nm ${mine ? "me" : ""}">${esc(mine ? "You" : b.name)} <span class="badge kind">${esc(b.kind)}</span></span><span>${fmt(b.balance)}</span>`;
+    return `<span class="nm ${mine ? "me" : ""}">${esc(mine ? "You" : b.name)} <span class="badge kind">${esc(b.kind)}</span>${b.card ? ` <span class="cardlbl">${esc(b.card)}</span>` : ""}</span><span>${fmt(b.balance)}</span>`;
   }).join("") : `<span class="empty">No buyers yet.</span>`);
 }
 
 function renderLog() {
   const log = S.log || [];
-  setHTML($("log"), log.length ? log.slice(0, 120).map((e) => `<li><span class="t">${esc(e.t)}</span><span class="who">${esc(e.who)}</span>${esc(e.text)}${e.tx ? `<a href="${esc(txUrl(e.tx))}" target="_blank" rel="noopener">tx ↗</a>` : ""}</li>`).join("") : `<li class="empty">Nothing yet.</li>`);
+  setHTML($("log"), log.length ? log.slice(0, 120).map((e) => `<li><span class="t">${esc(e.t)}</span><span class="who">${esc(e.who)}</span>${esc(e.text)}</li>`).join("") : `<li class="empty">Nothing yet.</li>`);
 }
 
 function renderScenario() {
@@ -702,29 +699,20 @@ function renderScenario() {
   if ($("scenario").textContent !== txt) $("scenario").textContent = txt;
 }
 function renderMeta() {
-  const prog = String(S.program || "");
-  const c = S.cluster || "?";
-  setHTML($("meta"), `<span class="dot on"></span>Solana ${esc(c)}${prog ? ` · program <span title="${esc(prog)}">${esc(prog.slice(0, 4))}…${esc(prog.slice(-4))}</span>` : ""}`);
+  const p = S.provider;
+  setHTML($("meta"), `<span class="dot on"></span>${p ? `Payments: ${esc(p.name || p.id)}` : "Connected"}`);
 }
 
-function rail(name, desc, status, url) {
-  const inner = `<span class="rn">${esc(name)}<span class="st ${status === "live" ? "live" : ""}">${esc(status)}</span></span><span class="rd">${esc(desc)}</span>`;
-  return url ? `<a class="rail" href="${esc(url)}" target="_blank" rel="noopener">${inner}<span class="rd">explorer ↗</span></a>` : `<div class="rail">${inner}</div>`;
+// what the payment provider can do: how long a hold lasts, whether it can capture less than authorized
+function capsText(c) {
+  if (!c) return "";
+  const days = c.maxHoldSecs ? c.maxHoldSecs / 86400 : 0;
+  const hold = days >= 1 ? `${fmt(Math.round(days * 10) / 10)} day${days === 1 ? "" : "s"}` : `${fmt(Math.round((c.maxHoldSecs || 0) / 3600))} hours`;
+  return [c.maxHoldSecs ? `holds up to ${hold}` : "", c.partialCapture ? "partial capture" : "", c.multiCapture ? "multi-capture" : "", c.incrementalAuth ? "incremental authorization" : ""].filter(Boolean).join(" · ");
 }
-function renderRails() {
-  const r = S.rails;
-  const list = Array.isArray(r) ? r : r && typeof r === "object" ? Object.entries(r).map(([k, v]) => ({ id: k, ...(v || {}) })) : [];
-  const find = (re) => list.find((x) => re.test(`${x.id || ""} ${x.name || ""} ${x.chain || ""}`));
-  const url = (x) => x && (x.explorer || x.url || x.tx);
-  const desc = (x, d) => (x && (x.note || x.desc || x.description)) || d;
-  const sol = find(/solana/i), tempo = find(/tempo/i), rh = find(/robinhood/i);
-  const c = S.cluster || "devnet";
-  const solUrl = url(sol) || (S.program ? `https://explorer.solana.com/address/${encodeURIComponent(S.program)}${/devnet|testnet/.test(c) ? `?cluster=${c}` : ""}` : "");
-  const out = [rail("Solana", desc(sol, `${c} · dUSDC auth-capture holds`), (sol && sol.status) || "live", solUrl)];
-  if (tempo) out.push(rail("Tempo", desc(tempo, "testnet · stablecoin payments"), tempo.status || "testnet", url(tempo)));
-  if (rh) out.push(rail("Robinhood Chain", desc(rh, "testnet · TSLA stock token"), rh.status || "testnet", url(rh)));
-  for (const x of list) if (x !== sol && x !== tempo && x !== rh) out.push(rail(x.name || x.id, desc(x, x.network || ""), x.status || "testnet", url(x)));
-  setHTML($("rails"), out.join(""));
+function renderProvider() {
+  const p = S.provider;
+  setHTML($("provider"), p ? `<div class="prov"><span class="rn">${esc(p.name || p.id)}<span class="st live">live</span></span><span class="rd">${esc(capsText(p.capabilities))}</span><span class="rd">Offers, bids and purchases are card authorizations: captured when a deal clears, voided otherwise.</span></div>` : "");
 }
 
 // ----------------------------------------------------------------- "You" panel
@@ -739,6 +727,8 @@ function renderYou() {
   if (me) {
     setHTML($("meName"), `${esc(me.name)} <span class="badge kind">${esc(me.kind || "human")}</span>`);
     $("meName").classList.remove("muted");
+    const card = (b && b.card) || me.card;
+    if (card && $("meCard").textContent !== card) $("meCard").textContent = card;
     $("meBal").textContent = fmt(b ? b.balance : me.balance);
   }
   const it = selItem();
@@ -749,7 +739,7 @@ function renderYou() {
   const counter = last && last.from === "seller" && last.action === "counter" ? last : null;
   const myHeld = it ? (it.holds || []).filter((h) => isMine(h) && h.status === "held") : [];
   const ok = !!me && listed;
-  const can = { offer: ok && m === "offers" && it.kind !== "digital", bid: ok && m === "auction", buy: ok && (m === "buy-now" || m === "dutch" || m === "offers") };
+  const can = { offer: ok && m === "offers" && (it.kind || "unique") === "unique", bid: ok && m === "auction", buy: ok && (m === "buy-now" || m === "dutch" || m === "offers") };
   $("bOffer").disabled = $("offerAmt").disabled = !can.offer;
   $("msgTxt").disabled = !can.offer;
   for (const q of document.querySelectorAll(".qchip")) q.disabled = !can.offer;
@@ -758,19 +748,19 @@ function renderYou() {
   $("bWalk").disabled = !(can.offer && (counter || myHeld.length));
   $("bBid").disabled = $("bidMax").disabled = !can.bid;
   $("bBuy").disabled = !can.buy;
-  $("bBuy").textContent = can.buy ? `${m === "offers" ? "Buy at ask" : "Buy now"} · ${fmt(m === "offers" ? it.ask : (it.price ?? it.ask))} dUSDC` : "Buy now";
+  $("bBuy").textContent = can.buy ? `${m === "offers" ? "Buy at ask" : "Buy now"} · ${fmt(m === "offers" ? it.ask : (it.price ?? it.ask))} USD` : "Buy now";
   $("offerAmt").placeholder = it && m === "offers" ? `Offer amount (ask ${fmt(it.ask)})` : "Offer amount";
   $("bidMax").placeholder = it && m === "auction" ? `Your max bid (ask ${fmt(it.ask)})` : "Your max bid";
   setHTML($("selItem"), it
     ? `${art(it, "")}<div style="min-width:0"><b>${esc(it.name)}</b><div class="muted">${esc(MECH[m] || m || "")} · ${it.status === "listed" ? `ask ${fmt(it.ask)}${m === "dutch" ? ` · now ${fmt(it.price)}` : ""}` : it.status === "sold" ? `sold for ${fmt(it.soldFor)}` : "unsold"}</div></div>`
     : `<span class="muted">Select a listing to trade on it.</span>`);
-  $("hint").textContent = !me ? "Setting up your demo wallet (300 dUSDC)…"
+  $("hint").textContent = !me ? "Issuing your demo card (300 USD available)…"
     : !it ? "" : !listed ? "This item is no longer for sale."
-    : m === "offers" ? "Your offer is held on-chain; the seller agent answers at once."
-    : m === "auction" ? "Proxy bid: your max is held; the winner pays 2nd-highest + 1, losers are refunded at close."
-    : m === "dutch" ? "The price falls over time. Buying captures the current price at once."
-    : it.guarantee ? `Fixed price with a ${it.guarantee} guarantee: your payment stays held and you can reclaim it yourself.`
-    : "Fixed price. Buying captures at once, with NFT delivery.";
+    : m === "offers" ? "Your offer is a hold on your card, not a charge; the seller agent answers at once. You can withdraw it until the seller accepts."
+    : m === "auction" ? "Proxy bid: your max is held on your card and binding until the auction closes. The winner pays 2nd-highest + 1; losing holds are released."
+    : m === "dutch" ? "The price falls over time. Buying charges the current price at once."
+    : it.guarantee ? `Fixed price with a ${it.guarantee} guarantee: your card is charged now, and you can refund it yourself within ${it.guarantee}.`
+    : "Fixed price. Buying charges your card at once.";
   const chatEl = $("chat");
   if (setHTML(chatEl, turns.length ? turns.slice(-10).map((t) => turnHTML(t, t.from === "buyer" ? "You" : "Seller")).join("") : "", "chat")) chatEl.scrollTop = chatEl.scrollHeight;
   let rep = it && actionNote[it.id];
@@ -779,7 +769,8 @@ function renderYou() {
   for (const x of (S && S.items) || []) for (const h of x.holds || []) if (isMine(h)) mine.push([x, h]);
   setHTML($("myHolds"), mine.length ? `<div class="tablewrap"><table>${mine.map(([x, h]) => `<tr>
       <td>${esc(x.name)}</td><td class="muted">${esc(h.kind)}</td><td class="num">${amountCell(h)}</td><td>${chip(h.status)}</td>
-      <td class="r">${h.status === "held" ? `<button class="btn ghost small" data-reclaim="${esc(h.id)}">Reclaim</button> ` : ""}${txLink(h.settleTx || h.tx)}</td></tr>`).join("")}</table></div>`
+      <td class="r">${h.status === "held" && h.kind === "offer" ? `<button class="btn ghost small" data-reclaim="${esc(h.id)}" title="Void the authorization; you are not charged">Withdraw</button> `
+        : refundable(h) ? `<button class="btn ghost small" data-reclaim="${esc(h.id)}" title="Refund inside the guarantee, until ${esc(fmtDate(h.refundableUntil))}">Refund</button> ` : ""}${holdRef(h)}</td></tr>`).join("")}</table></div>`
     : `<div class="empty">None yet.</div>`);
 }
 
@@ -790,7 +781,7 @@ function render() {
     const first = items.find((i) => i.status === "listed") || items[0];
     if (first) select(first.id, false);
   }
-  renderMeta(); renderScenario(); renderKpis(); renderItems(); renderLedger(); renderWallets(); renderLog(); renderRails(); renderYou(); tick();
+  renderMeta(); renderScenario(); renderKpis(); renderItems(); renderLedger(); renderAccounts(); renderLog(); renderProvider(); renderYou(); tick();
 }
 
 function tick() {
@@ -829,7 +820,7 @@ function ensureBuyer(force) {
 async function bootBuyer() {
   for (let i = 0; i < 30; i++) {
     try { await ensureBuyer(); $("err").textContent = ""; render(); renderYou(); return; }
-    catch (e) { $("err").textContent = `Wallet setup failed: ${e.message}. Retrying…`; await new Promise((r) => setTimeout(r, 2000)); }
+    catch (e) { $("err").textContent = `Card setup failed: ${e.message}. Retrying…`; await new Promise((r) => setTimeout(r, 2000)); }
   }
 }
 // actions retry once with a fresh buyer if the server forgot us (e.g. restart)
@@ -876,7 +867,7 @@ $("bOffer").onclick = () => act(async () => {
   if (!amount || amount <= 0) throw new Error("Enter an offer amount.");
   const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/offer`, withMsg({ buyerId: me.id, amount }));
   sentMsg();
-  note(it.id, r && r.reply ? (r.reply.action === "decline" ? "Your hold was released (refunded)." : "") : `Offer of ${fmt(amount)} held.`);
+  note(it.id, r && r.reply ? (r.reply.action === "decline" ? "The seller declined; your hold was released and nothing was charged." : "") : `Offer of ${fmt(amount)} held on your card.`);
   $("offerAmt").value = "";
 });
 $("bAccept").onclick = () => act(async () => {
@@ -884,27 +875,27 @@ $("bAccept").onclick = () => act(async () => {
   const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, withMsg({ buyerId: me.id, action: "accept" }));
   sentMsg();
   const h = r && r.hold;
-  note(it.id, `<span class="bubble">You bought it${h ? ` for <b>${fmt(h.captured ?? h.amount)}</b> dUSDC` : ""}</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
+  note(it.id, `<span class="bubble">You bought it${h ? ` for <b>${fmt(h.captured ?? h.amount)}</b> USD` : ""}</span> ${holdRef(h)}`);
 });
 $("bWalk").onclick = () => act(async () => {
   const it = selItem();
   await api("POST", `/api/items/${encodeURIComponent(it.id)}/respond`, withMsg({ buyerId: me.id, action: "walk_away" }));
   sentMsg();
-  note(it.id, `You walked away; your hold is refunded.`);
+  note(it.id, `You walked away; your hold is released and nothing was charged.`);
 });
 $("bBid").onclick = () => act(async () => {
   const it = selItem(); const max = Math.round(Number($("bidMax").value));
   if (!max || max <= 0) throw new Error("Enter your max bid.");
   const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/bid`, { buyerId: me.id, max });
   const lead = r && r.item && r.item.auction && r.item.auction.leader;
-  note(it.id, `Bid placed: <b>${fmt(max)}</b> held ${r && r.hold ? txLink(r.hold.tx) : ""}${lead ? ` · leading: ${esc(displayName(lead))}` : ""}`);
+  note(it.id, `Bid placed: <b>${fmt(max)}</b> held on your card ${holdRef(r && r.hold)}${lead ? ` · leading: ${esc(displayName(lead))}` : ""}`);
   $("bidMax").value = "";
 });
 $("bBuy").onclick = () => act(async () => {
   const it = selItem();
   const r = await api("POST", `/api/items/${encodeURIComponent(it.id)}/buy`, { buyerId: me.id });
   const h = r && r.hold;
-  note(it.id, `<span class="bubble">Bought for <b>${fmt(h ? (h.captured ?? h.amount) : it.price)}</b> dUSDC</span> ${h ? txLink(h.settleTx || h.tx) : ""}`);
+  note(it.id, `<span class="bubble">Bought for <b>${fmt(h ? (h.captured ?? h.amount) : it.price)}</b> USD</span> ${holdRef(h)}${refundable(h) ? ` <span class="muted">· refundable until ${esc(fmtDate(h.refundableUntil))}</span>` : ""}`);
 });
 $("myHolds").addEventListener("click", (e) => {
   const b = e.target.closest("[data-reclaim]"); if (!b) return;
@@ -950,7 +941,7 @@ bootBuyer();
 // fallback if the SSE snapshot is slow to arrive
 setTimeout(async () => {
   if (S) return;
-  try { const items = await api("GET", "/api/items"); if (!S) { S = { cluster: "", program: "", items, buyers: [], log: [] }; render(); } } catch {}
+  try { const items = await api("GET", "/api/items"); if (!S) { S = { items, buyers: [], log: [] }; render(); } } catch {}
 }, 2500);
 </script>
 </body>

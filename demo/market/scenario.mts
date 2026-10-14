@@ -109,7 +109,7 @@ export function createScenario(o: Opts) {
       },
     },
     {
-      name: "Auction closes: winner pays 2nd price + 1, losers refunded",
+      name: "Auction closes: winner pays 2nd price + 1, losing holds released",
       run: async () => {
         await until("the auction to settle", async () => { const i = await item(ids.m1); return i && i.status !== "listed" && !i.holds.some((h: any) => h.status === "held"); }, 600);
       },
@@ -151,7 +151,7 @@ export function createScenario(o: Opts) {
       },
     },
     {
-      name: "Cy reclaims the print payment inside the guarantee window",
+      name: "Cy is refunded for the print inside the guarantee window",
       run: async () => {
         o.say("Cy", "the file is the wrong resolution: taking my money back, no seller approval needed");
         await api("POST", `/api/holds/${ids.printHold}/reclaim`, { buyerId: B.Cy.id });

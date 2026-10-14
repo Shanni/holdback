@@ -1,29 +1,22 @@
 {
   "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
-    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
+    "start": "node demo/market/server.mts",
+    "seed:store": "node demo/market/seed-store.mts",
+    "test": "node --test demo/mechanism.test.mts demo/market/negotiation.test.mts demo/market/payments.test.mts",
+    "test:mcp": "node mcp/test.mts",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "build": "anchor build --no-idl && RUSTUP_TOOLCHAIN=nightly anchor idl build -o target/idl/holdback.json -t target/types/holdback.ts",
-    "test": "anchor test --skip-build",
-    "shopify:assets": "cp demo/public/holdback.js demo/public/store/extension/assets/holdback.js",
-    "demo:mock": "node demo/public/mock-server.mjs"
+    "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
+    "shopify:assets": "cp demo/public/holdback.js demo/public/store/extension/assets/holdback.js"
   },
   "dependencies": {
-    "@coral-xyz/anchor": "^0.32.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "@solana/web3.js": "^1.99.0",
-    "true-solar-time-mcp": "^1.1.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@solana/spl-token": "^0.4.15",
-    "@types/bn.js": "^5.1.0",
-    "@types/chai": "^4.3.0",
-    "@types/mocha": "^9.0.0",
-    "chai": "^4.3.4",
-    "mocha": "^9.0.3",
-    "prettier": "^2.6.2",
-    "ts-mocha": "^10.0.0",
-    "typescript": "^5.7.3"
+    "prettier": "^2.6.2"
   }
 }

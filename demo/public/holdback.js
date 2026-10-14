@@ -1,16 +1,17 @@
-/* Holdback widget: escrowed offers, bids and guaranteed purchases on any product page. No deps.
+/* Holdback widget: held offers, bids and guaranteed purchases on any product page. No deps.
  *
  *   <script src="https://YOUR-MARKET/holdback.js" defer></script>
  *   <div data-holdback-item="monkey-3"></div>
  *
- * Every offer, bid and purchase is an on-chain hold: captured when the deal clears, refunded otherwise.
+ * Every offer, bid and purchase is a hold on the shopper's card (an authorization): captured when the deal
+ * clears, released otherwise. Guaranteed purchases are charged at once and refundable inside the window.
  *
  * Options, on the script tag or on a mount element (mount wins):
  *   data-market / data-holdback-market   market server URL (default: where holdback.js was loaded from)
  *   data-theme                           "light" (default) | "dark" | "auto"
  *   data-buyer-name                      name shown to the seller (default: "Shopper XXXX")
  * Theme from the host page's CSS: --holdback-accent, --holdback-on-accent, --holdback-radius, --holdback-font.
- * Events (bubble out of the mount, detail = { item, hold }): holdback:hold, holdback:purchase, holdback:refund.
+ * Events (bubble out of the mount, detail = { item, hold }): holdback:hold, holdback:purchase, holdback:release, holdback:refund.
  * JS: Holdback.mount(el, itemId), Holdback.open(itemId), Holdback.market, Holdback.onChange(fn).
  */
 (() => {
@@ -31,16 +32,13 @@
   const fmt = (n) => n == null || n === "" || isNaN(n) ? "–" : (Number.isInteger(+n) ? String(+n) : (+n).toFixed(2));
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-  const usd = (n) => `${fmt(n)} <span class="cur">dUSDC</span>`;
   const MECH = { "buy-now": "Buy now", offers: "Make an offer", auction: "Live auction", dutch: "Price dropping" };
   const WHY = { "buy-now": "Why a fixed price?", offers: "Why offers?", auction: "Why an auction?", dutch: "Why a falling price?" };
 
-  function txUrl(tx) {
-    if (!tx) return "";
-    if (/^https?:\/\//i.test(tx)) return tx;
-    return `https://explorer.solana.com/tx/${encodeURIComponent(tx)}?cluster=devnet`;
-  }
-  const txLink = (tx, label = "View on Solana ↗") => tx ? `<a class="tx" href="${esc(txUrl(tx))}" target="_blank" rel="noopener">${label}</a>` : "";
+  // processor reference (authorization id), shown as plain text
+  const holdRef = (h) => h && h.ref ? `<span class="hr" title="Payment reference">${esc(h.ref)}</span>` : "";
+  const refundable = (h) => !!h && h.status === "captured" && !!h.refundableUntil && Date.parse(h.refundableUntil) > Date.now();
+  const fmtDate = (iso) => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""; };
   const chip = (st) => `<span class="chip ${esc(st)}">${esc(st)}</span>`;
 
   function monkey(hue) {
@@ -79,12 +77,12 @@
   a { color: inherit; }
   .muted { color: var(--muted); }
   .cur { font-size: .85em; color: var(--muted); font-weight: 500; }
-  .tx { color: var(--muted); font-size: 12px; text-decoration: none; white-space: nowrap; }
-  .tx:hover { color: var(--ink); text-decoration: underline; }
+  .hr { color: var(--muted); font-size: 12px; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; }
   .lock { width: 12px; height: 12px; flex: none; }
   .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 0 8px; line-height: 20px; border-radius: 999px; white-space: nowrap; text-transform: capitalize; }
   .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .chip.held { background: var(--held-bg); color: var(--held); } .chip.captured { background: var(--cap-bg); color: var(--cap); } .chip.refunded { background: var(--ref-bg); color: var(--ref); }
+  .chip.released { background: var(--sunken); color: var(--muted); }
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: var(--r); border: 1px solid var(--accent);
     background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
   .btn:hover:not(:disabled) { opacity: .88; }
@@ -167,7 +165,7 @@
   .li .r { display: grid; gap: 4px; justify-items: end; text-align: right; }
   .empty { color: var(--muted); font-size: 13px; padding: 12px; }
   .ft { border-top: 1px solid var(--line); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
-  .ft .wal b { color: var(--ink); font-size: 14px; }
+  .ft .card b { color: var(--ink); font-size: 14px; }
   .ft .by { display: inline-flex; gap: 6px; align-items: center; }
   `;
 
@@ -185,7 +183,9 @@
   const isMine = (h) => !!me && (h.buyer === me.name || h.buyer === me.id);
   const myHolds = () => { const out = []; for (const it of items()) for (const h of it.holds || []) if (isMine(h)) out.push([it, h]); return out; };
   const myTurns = (it) => (me && it && it.negotiations && (it.negotiations[me.name] || it.negotiations[me.id])) || [];
-  const myBalance = () => { const b = me && S && (S.buyers || []).find((x) => x.id === me.id); return b ? b.balance : me && me.balance; };
+  const myBuyer = () => me && S && (S.buyers || []).find((x) => x.id === me.id);
+  const myBalance = () => { const b = myBuyer(); return b ? b.balance : me && me.balance; };
+  const myCard = () => { const b = myBuyer(); return (b && b.card) || (me && me.card) || ""; };
   const boughtByMe = (it) => it.status === "sold" && me && (it.soldTo === me.name || it.soldTo === me.id);
 
   // ------------------------------------------------------------------ API
@@ -231,28 +231,31 @@
     const held = (it.holds || []).filter((h) => isMine(h) && h.status === "held");
     const turns = myTurns(it), last = turns[turns.length - 1];
     if (boughtByMe(it)) {
-      const h = (it.holds || []).find((x) => isMine(x) && x.status !== "refunded");
-      return `<div class="mine">${chip(h ? h.status : "captured")} You bought this for <b>${fmt(it.soldFor)}</b> dUSDC ${txLink(it.saleTx)}</div>`;
+      const h = (it.holds || []).find((x) => isMine(x) && x.status === "captured");
+      return `<div class="mine">${chip(h ? h.status : "captured")} You bought this for <b>${fmt(it.soldFor)}</b> USD ${holdRef(h)}</div>`;
     }
-    if (!held.length) return last && last.from === "seller" && last.action === "decline" ? `<div class="mine">${chip("refunded")} Your offer was declined and refunded.</div>` : "";
+    if (!held.length) return last && last.from === "seller" && last.action === "decline" ? `<div class="mine">${chip("released")} Your offer was declined. The hold is released; nothing was charged.</div>` : "";
     const h = held[held.length - 1];
     const ctr = last && last.from === "seller" && last.action === "counter" ? ` · seller countered <b>${fmt(last.amount)}</b>` : "";
     const lead = it.auction && h.kind === "bid" ? (it.auction.leader === me.name || it.auction.leader === me.id ? " · you're leading" : " · you've been outbid") : "";
-    return `<div class="mine">${chip("held")} Your ${esc(h.kind)} of <b>${fmt(h.amount)}</b> is held${ctr}${lead}</div>`;
+    return `<div class="mine">${chip("held")} Your ${esc(h.kind)} of <b>${fmt(h.amount)}</b> is held on your card${ctr}${lead}</div>`;
   }
 
   function blockHTML(it) {
     if (!S) return `<div class="blk"><div class="skel" style="width:40%"></div><div class="skel" style="width:70%"></div><div class="skel" style="height:44px"></div></div>`;
-    if (!it) return `<div class="blk"><div class="facts">Escrowed offers aren't available for this product.</div></div>`;
-    const trust = `<div class="trust">${LOCK}<span><b>Your payment is held, not sent.</b> It's captured only when the deal clears and refunded otherwise. Secured by Holdback on Solana.</span></div>`;
+    if (!it) return `<div class="blk"><div class="facts">Holdback offers aren't available for this product.</div></div>`;
+    const trust = it.guarantee
+      ? `<div class="trust">${LOCK}<span><b>Money back, no questions.</b> Refund it yourself within ${esc(it.guarantee)}${shipped(it) ? " if it doesn't arrive or isn't as described" : ""}; no seller approval needed. Protected by Holdback.</span></div>`
+      : `<div class="trust">${LOCK}<span><b>Your card is held, not charged.</b> You're charged only when the deal clears; otherwise the hold is released. Protected by Holdback.</span></div>`;
     if (it.status === "sold") {
-      return `<div class="blk sold"><div class="top"><span class="mech">Sold</span><span class="facts">for <b>${fmt(it.soldFor)}</b> dUSDC</span></div>${myLine(it)}${it.guarantee && boughtByMe(it) ? `<div class="facts">${shipped(it) ? `On its way. Your payment stays in escrow for ${esc(it.guarantee)}: if it doesn't arrive, reclaim it yourself.` : `${esc(it.guarantee)} guarantee: you can reclaim your payment yourself until it releases.`}</div><button class="btn ghost block" data-open>Manage your purchase</button>` : ""}</div>`;
+      const bought = boughtByMe(it) ? (it.holds || []).find((h) => isMine(h) && h.status === "captured") : null;
+      return `<div class="blk sold"><div class="top"><span class="mech">Sold</span><span class="facts">for <b>${fmt(it.soldFor)}</b> USD</span></div>${myLine(it)}${it.guarantee && refundable(bought) ? `<div class="facts">${shipped(it) ? `On its way. If it doesn't arrive or isn't as described, refund it yourself until ${esc(fmtDate(bought.refundableUntil))}.` : `${esc(it.guarantee)} guarantee: you can refund it yourself until ${esc(fmtDate(bought.refundableUntil))}.`}</div><button class="btn ghost block" data-open>Manage your purchase</button>` : ""}</div>`;
     }
-    if (it.status !== "listed") return `<div class="blk"><div class="top"><span class="mech">No longer for sale</span></div><div class="facts">Every hold on this item was refunded.</div></div>`;
+    if (it.status !== "listed") return `<div class="blk"><div class="top"><span class="mech">No longer for sale</span></div><div class="facts">Every hold on this item was released; nobody was charged.</div></div>`;
     let mech = MECH[it.mechanism] || it.mechanism, facts = "", cta = "";
     switch (it.mechanism) {
       case "offers":
-        facts = `Asking <b>${fmt(it.ask)}</b> dUSDC · the seller replies instantly`;
+        facts = `Asking <b>${fmt(it.ask)}</b> USD · the seller replies instantly`;
         cta = "Make an offer"; break;
       case "auction": {
         const a = it.auction || {};
@@ -261,13 +264,13 @@
         cta = "Place a bid"; break;
       }
       case "dutch":
-        facts = `Now <b>${fmt(it.price)}</b> dUSDC, down from ${fmt(it.ask)} · falls until someone buys`;
+        facts = `Now <b>${fmt(it.price)}</b> USD, down from ${fmt(it.ask)} · falls until someone buys`;
         cta = `Buy now at ${fmt(it.price)}`; break;
       default:
-        mech = shipped(it) ? "Buy with delivery protection" : it.guarantee ? `Buy with a ${esc(it.guarantee)} guarantee` : "Buy with escrow";
-        facts = shipped(it) ? `<b>${fmt(it.price ?? it.ask)}</b> dUSDC · held in escrow while it ships; reclaim it yourself within ${esc(it.guarantee)} if it doesn't arrive`
-          : it.guarantee ? `<b>${fmt(it.price ?? it.ask)}</b> dUSDC · reclaim it yourself within ${esc(it.guarantee)}, no questions` : `<b>${fmt(it.price ?? it.ask)}</b> dUSDC · item and payment swap in one transaction`;
-        cta = `Buy · ${fmt(it.price ?? it.ask)} dUSDC`;
+        mech = shipped(it) ? "Buy with delivery protection" : it.guarantee ? `Buy with a ${esc(it.guarantee)} guarantee` : "Buy now";
+        facts = shipped(it) ? `<b>${fmt(it.price ?? it.ask)}</b> USD · refund it yourself within ${esc(it.guarantee)} if it doesn't arrive or isn't as described`
+          : it.guarantee ? `<b>${fmt(it.price ?? it.ask)}</b> USD · refund it yourself within ${esc(it.guarantee)}, no questions` : `<b>${fmt(it.price ?? it.ask)}</b> USD · charged when you buy`;
+        cta = `Buy · ${fmt(it.price ?? it.ask)} USD`;
     }
     return `<div class="blk"><div class="top"><span class="mech">${mech}</span></div><div class="facts">${facts}</div>${myLine(it)}
       <button class="btn block" data-open>${cta}</button>${trust}</div>`;
@@ -286,7 +289,7 @@
         <div class="hd"><div class="art" id="art"></div><div style="min-width:0"><h2 id="t"></h2><div class="sub" id="sub"></div></div><button class="x" id="x" aria-label="Close">×</button></div>
         <div class="tabs" role="tablist"><button role="tab" data-tab="item" aria-selected="true">This item</button><button role="tab" data-tab="holds" aria-selected="false">Your holds</button></div>
         <div class="bd" id="bd"></div>
-        <div class="ft"><span class="wal" id="wal">Setting up your wallet…</span><span class="by">${LOCK} Holdback · auth-capture escrow</span></div>
+        <div class="ft"><span class="card" id="card">Setting up your card…</span><span class="by">${LOCK} Holdback · card holds</span></div>
       </div>`;
     document.body.appendChild(host);
     drawer = { host, root, itemId: null, tab: "item", opener: null, cache: new Map() };
@@ -344,10 +347,11 @@
     const mine = (it.holds || []).filter(isMine);
     const h = mine[mine.length - 1];
     const st = h ? h.status : null;
-    const done = st === "captured" ? "Paid to seller" : st === "refunded" ? "Back to you" : "Paid or refunded";
-    return `<div class="flow" aria-label="Where your money is"><div class="${h ? "on" : ""}"><b>1 · Held</b>in escrow, not sent</div>
-      <div class="${st ? "on" : ""}"><b>2 · Deal</b>${h && h.kind === "buy" && st === "held" ? (shipped(it) ? "ordered, shipping" : "bought, window open") : it.status === "sold" ? "cleared" : st === "held" ? "waiting on the seller" : "accept, win or buy"}</div>
-      <div class="${st && st !== "held" ? "on" : ""}"><b>3 · Settled</b>${h && h.kind === "buy" && st === "held" ? `releases after ${esc(it.guarantee || "the window")}, or you reclaim` : done}</div></div>`;
+    const win = refundable(h);
+    const done = st === "captured" ? (win ? `charged · refundable until ${esc(fmtDate(h.refundableUntil))}` : "charged") : st === "released" ? "released, never charged" : st === "refunded" ? "refunded to you" : "charged or released";
+    return `<div class="flow" aria-label="Where your money is"><div class="${h ? "on" : ""}"><b>1 · Held</b>authorized on your card</div>
+      <div class="${st ? "on" : ""}"><b>2 · Deal</b>${win ? (shipped(it) ? "ordered, shipping" : "bought, refund window open") : it.status === "sold" && st === "captured" ? "cleared" : st === "held" ? "waiting on the seller" : "accept, win or buy"}</div>
+      <div class="${st && st !== "held" ? "on" : ""}"><b>3 · Settled</b>${done}</div></div>`;
   }
 
   // the form for the item's current mechanism; rebuilt only when its key changes, so typing is never lost
@@ -359,14 +363,14 @@
           <div id="counter"></div>
           <div><label class="lbl" for="msg">Message to the seller <span class="muted">(optional)</span></label>
             <input id="msg" type="text" maxlength="280" autocomplete="off" placeholder="Explain your offer or ask about the piece"></div>
-          <div class="qchips"><button class="qchip" data-fill="I'm a student — any flexibility?">I'm a student — any flexibility?</button><button class="qchip" data-fill="Huge fan of this series!">Huge fan of this series!</button><button class="qchip" data-fill="Is the NFT in escrow?">Is the NFT in escrow?</button></div>
+          <div class="qchips"><button class="qchip" data-fill="I'm a student — any flexibility?">I'm a student — any flexibility?</button><button class="qchip" data-fill="Huge fan of this series!">Huge fan of this series!</button><button class="qchip" data-fill="Is it one of a kind?">Is it one of a kind?</button></div>
           <div class="row"><input id="amt" type="number" min="1" step="1" inputmode="numeric" placeholder="Your offer (ask ${fmt(it.ask)})" aria-label="Offer amount"><button class="btn" data-act="offer">Make offer</button></div>
-          <div class="hint">Your offer is held on-chain while the seller agent decides. A new offer replaces the old one, and the old hold comes back to you.</div>
-          <button class="btn ghost block" data-act="buy">Or buy at ask · ${fmt(it.ask)} dUSDC</button></div>`;
+          <div class="hint">Your offer is a hold on your card, not a charge, while the seller agent decides. A new offer replaces the old one, and the old hold is released.</div>
+          <button class="btn ghost block" data-act="buy">Or buy at ask · ${fmt(it.ask)} USD</button></div>`;
       case "auction": return `<div class="stack">
           <div><label class="lbl" for="amt">Your maximum bid</label>
           <div class="row"><input id="amt" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. ${fmt(Math.max(it.ask, ((it.auction && it.auction.price) || 0) + 5))}" aria-label="Maximum bid"><button class="btn" data-act="bid">Place bid</button></div></div>
-          <div class="hint">Proxy bidding: your maximum is held, but if you win you pay the second-highest bid + 1. Losing bids are refunded when the auction closes.</div></div>`;
+          <div class="hint">Proxy bidding: your maximum is held on your card, but if you win you pay the second-highest bid + 1. Bids are binding until the auction closes; losing holds are released then.</div></div>`;
       default: return `<div class="stack" id="buybox"></div>`;
     }
   }
@@ -389,23 +393,23 @@
     const set = (id, html) => { const el = $(id); if (el && d.cache.get(id) !== html) { d.cache.set(id, html); el.innerHTML = html; return true; } return false; };
     set("reason", esc(it.reason));
     const a = it.auction || {};
-    set("price", it.status === "sold" ? `<span class="big">${fmt(it.soldFor)}</span><span class="muted">dUSDC · ${boughtByMe(it) ? "you bought this" : "sold"} ${txLink(it.saleTx)}</span>`
+    set("price", it.status === "sold" ? `<span class="big">${fmt(it.soldFor)}</span><span class="muted">USD · ${boughtByMe(it) ? "you bought this" : "sold"}</span>`
       : it.status !== "listed" ? `<span class="muted">No longer for sale.</span>`
-      : it.mechanism === "auction" ? `<span class="big">${fmt(a.price ?? it.ask)}</span><span class="muted">dUSDC now · ${a.bids || 0} bids · ${a.closed ? "closed" : countdown(a.endsAt)}</span>`
-      : it.mechanism === "dutch" ? `<span class="big">${fmt(it.price)}</span><span class="muted">dUSDC now · started at ${fmt(it.ask)}, dropping</span>`
-      : it.mechanism === "offers" ? `<span class="big">${fmt(it.ask)}</span><span class="muted">dUSDC asking · offers welcome</span>`
-      : `<span class="big">${fmt(it.price ?? it.ask)}</span><span class="muted">dUSDC${shipped(it) ? ` · ${esc(it.guarantee)} delivery protection` : it.guarantee ? ` · ${esc(it.guarantee)} money-back guarantee` : ""}</span>`);
+      : it.mechanism === "auction" ? `<span class="big">${fmt(a.price ?? it.ask)}</span><span class="muted">USD now · ${a.bids || 0} bids · ${a.closed ? "closed" : countdown(a.endsAt)}</span>`
+      : it.mechanism === "dutch" ? `<span class="big">${fmt(it.price)}</span><span class="muted">USD now · started at ${fmt(it.ask)}, dropping</span>`
+      : it.mechanism === "offers" ? `<span class="big">${fmt(it.ask)}</span><span class="muted">USD asking · offers welcome</span>`
+      : `<span class="big">${fmt(it.price ?? it.ask)}</span><span class="muted">USD${shipped(it) ? ` · ${esc(it.guarantee)} delivery protection` : it.guarantee ? ` · ${esc(it.guarantee)} money-back guarantee` : ""}</span>`);
     const turns = myTurns(it);
     if (set("thread", turns.slice(-12).map(turnHTML).join(""))) { const t = $("thread"); t.scrollTop = t.scrollHeight; }
     const last = turns[turns.length - 1];
     const counter = last && last.from === "seller" && last.action === "counter" ? last : null;
-    const heldOffer = (it.holds || []).some((h) => isMine(h) && h.status === "held");
-    set("counter", counter ? `<div class="row"><button class="btn" data-act="accept" style="flex:1">Accept ${fmt(counter.amount)} dUSDC</button><button class="btn ghost" data-act="walk">Walk away</button></div>`
+    const heldOffer = (it.holds || []).some((h) => isMine(h) && h.kind === "offer" && h.status === "held");
+    set("counter", counter ? `<div class="row"><button class="btn" data-act="accept" style="flex:1">Accept ${fmt(counter.amount)} USD</button><button class="btn ghost" data-act="walk">Walk away</button></div>`
       : heldOffer ? `<div class="row"><button class="btn ghost block" data-act="walk">Withdraw my offer</button></div>` : "");
     if (it.status === "listed" && (it.mechanism === "buy-now" || it.mechanism === "dutch")) {
       const p = it.mechanism === "dutch" ? it.price : it.price ?? it.ask;
-      set("buybox", `<button class="btn block" data-act="buy">Buy now · ${fmt(p)} dUSDC</button>
-        <div class="hint">${shipped(it) ? `Your payment goes into escrow, not to the maker. If it doesn't arrive or isn't as described, reclaim it yourself from “Your holds” within ${esc(it.guarantee)}, no seller approval needed. Otherwise it releases to the maker when the window ends.` : it.guarantee ? `Your payment stays held for ${esc(it.guarantee)}. Not happy? Reclaim it yourself from “Your holds”, no seller approval needed.` : it.mechanism === "dutch" ? "The price falls on a schedule. Buying captures the current price at once, with delivery in the same transaction." : "Item and payment swap in one transaction."}</div>`);
+      set("buybox", `<button class="btn block" data-act="buy">Buy now · ${fmt(p)} USD</button>
+        <div class="hint">${shipped(it) ? `Your card is charged now. If it doesn't arrive or isn't as described, refund it yourself from “Your holds” within ${esc(it.guarantee)}, no seller approval needed.` : it.guarantee ? `Your card is charged now. Not happy? Refund it yourself from “Your holds” within ${esc(it.guarantee)}, no seller approval needed.` : it.mechanism === "dutch" ? "The price falls on a schedule. Buying charges the current price at once." : "Buying charges your card at once."}</div>`);
     }
     set("note", notes[it.id] || "");
     set("err", esc(lastErr));
@@ -415,9 +419,9 @@
   function holdsTab() {
     const mine = myHolds().slice().reverse();
     const html = mine.length ? `<div class="list">${mine.map(([it, h]) => `<div class="li"><span class="art">${art(it)}</span>
-        <span style="min-width:0"><span class="nm">${esc(it.name)}</span><span class="meta">${esc(h.kind)} · ${h.captured != null && h.captured < h.amount ? `${fmt(h.captured)} of ${fmt(h.amount)}, ${fmt(h.amount - h.captured)} back` : fmt(h.amount)} dUSDC</span></span>
-        <span class="r">${chip(h.status)}${h.status === "held" ? `<button class="btn ghost small" data-reclaim="${esc(h.id)}">Reclaim</button>` : txLink(h.settleTx || h.tx, "tx ↗")}</span></div>`).join("")}</div>
-        <div class="hint">Held money is still yours: it sits in an escrow account on Solana until the deal clears. Reclaim works for guarantees and for offers the seller hasn't taken.</div>
+        <span style="min-width:0"><span class="nm">${esc(it.name)}</span><span class="meta">${esc(h.kind)} · ${h.captured != null && h.captured < h.amount ? `${fmt(h.captured)} of ${fmt(h.amount)}, ${fmt(h.amount - h.captured)} released` : fmt(h.amount)} USD${refundable(h) ? ` · refundable until ${esc(fmtDate(h.refundableUntil))}` : ""}</span></span>
+        <span class="r">${chip(h.status)}${h.status === "held" && h.kind === "offer" ? `<button class="btn ghost small" data-reclaim="${esc(h.id)}">Withdraw</button>` : refundable(h) ? `<button class="btn ghost small" data-reclaim="${esc(h.id)}">Refund</button>` : holdRef(h)}</span></div>`).join("")}</div>
+        <div class="hint">A hold reserves money on your card without charging it. Withdraw an offer the seller hasn't taken, or refund a guaranteed purchase inside its window. Bids stay binding until the auction closes.</div>
         <div class="err" id="err" role="alert">${esc(lastErr)}</div>`
       : `<div class="empty">No holds yet. Make an offer, bid or buy, and the held payment shows up here.</div>`;
     if (drawer.cache.get("holds") !== html) { drawer.cache.set("holds", html); drawer.cache.delete("formKey"); drawer.root.getElementById("bd").innerHTML = html; }
@@ -438,7 +442,7 @@
       if (b.dataset.tab === "holds") b.textContent = n ? `Your holds (${n} open)` : "Your holds";
     }
     if (d.tab === "holds") holdsTab(); else if (it) { d.cache.delete("holds"); itemTab(it); }
-    $("wal").innerHTML = me ? `${esc(me.name)} · <b>${fmt(myBalance())}</b> dUSDC` : "Setting up your wallet…";
+    $("card").innerHTML = me ? `${esc(me.name)}${myCard() ? ` · ${esc(myCard())}` : ""} · <b>${fmt(myBalance())}</b> USD available` : "Setting up your card…";
     tick();
   }
 
@@ -460,26 +464,27 @@
       if (b.dataset.act === "offer") {
         const r = await api("POST", `${path}/offer`, { buyerId: me.id, amount: amount(), ...msg() });
         clearMsg(); $("amt").value = "";
-        notes[it.id] = r && r.reply && r.reply.action === "decline" ? "The seller declined, so your hold came straight back to you." : r && r.reply && r.reply.action === "accept" ? `Deal! Paid ${fmt(r.hold && (r.hold.captured ?? r.hold.amount))} dUSDC and the item is yours. ${txLink(r.hold && (r.hold.settleTx || r.hold.tx))}` : "";
+        notes[it.id] = r && r.reply && r.reply.action === "decline" ? "The seller declined, so your hold was released. Nothing was charged." : r && r.reply && r.reply.action === "accept" ? `Deal! Charged ${fmt(r.hold && (r.hold.captured ?? r.hold.amount))} USD and the item is yours. ${holdRef(r.hold)}` : "";
       } else if (b.dataset.act === "accept") {
         const r = await api("POST", `${path}/respond`, { buyerId: me.id, action: "accept", ...msg() });
         clearMsg();
-        notes[it.id] = `Deal! Paid ${fmt(r.hold && (r.hold.captured ?? r.hold.amount))} dUSDC and the item is yours. ${txLink(r.hold && (r.hold.settleTx || r.hold.tx))}`;
+        notes[it.id] = `Deal! Charged ${fmt(r.hold && (r.hold.captured ?? r.hold.amount))} USD and the item is yours. ${holdRef(r.hold)}`;
       } else if (b.dataset.act === "walk") {
         await api("POST", `${path}/respond`, { buyerId: me.id, action: "walk_away", ...msg() });
-        clearMsg(); notes[it.id] = "You walked away. Your hold is refunded.";
+        clearMsg(); notes[it.id] = "You walked away. Your hold is released; nothing was charged.";
       } else if (b.dataset.act === "bid") {
         const max = amount();
         const r = await api("POST", `${path}/bid`, { buyerId: me.id, max });
         $("amt").value = "";
         const lead = r && r.item && r.item.auction && r.item.auction.leader;
-        notes[it.id] = `Bid placed: up to ${fmt(max)} dUSDC is held. ${lead && (lead === me.name || lead === me.id) ? "You're leading." : "You're not leading yet."} ${txLink(r && r.hold && r.hold.tx)}`;
+        notes[it.id] = `Bid placed: up to ${fmt(max)} USD is held on your card. ${lead && (lead === me.name || lead === me.id) ? "You're leading." : "You're not leading yet."} ${holdRef(r && r.hold)}`;
       } else if (b.dataset.act === "buy") {
         const r = await api("POST", `${path}/buy`, { buyerId: me.id });
         const h = r && r.hold;
-        notes[it.id] = shipped(it) ? `Ordered. ${fmt(h && h.amount)} dUSDC is held in escrow while it ships, not paid to the maker yet. ${txLink(h && h.tx)}`
-          : it.guarantee ? `Bought. ${fmt(h && h.amount)} dUSDC is held for ${esc(it.guarantee)}: reclaim it from “Your holds” if you change your mind. ${txLink(h && h.tx)}`
-          : `Bought for ${fmt(h && (h.captured ?? h.amount))} dUSDC. ${txLink(h && (h.settleTx || h.tx))}`;
+        const until = esc(h && h.refundableUntil ? fmtDate(h.refundableUntil) : it.guarantee || "");
+        notes[it.id] = shipped(it) ? `Ordered. Charged ${fmt(h && (h.captured ?? h.amount))} USD. If it doesn't arrive or isn't as described, refund it from “Your holds” until ${until}. ${holdRef(h)}`
+          : it.guarantee ? `Bought. Charged ${fmt(h && (h.captured ?? h.amount))} USD, refundable from “Your holds” until ${until} if you change your mind. ${holdRef(h)}`
+          : `Bought for ${fmt(h && (h.captured ?? h.amount))} USD. ${holdRef(h)}`;
       }
     });
     b.disabled = false;
@@ -518,9 +523,10 @@
       const was = prevMine.get(h.id);
       if (was === h.status) continue;
       let type = null;
-      if (h.status === "refunded") type = "holdback:refund";
-      else if (h.status === "captured" && !(h.kind === "buy" && was === "held")) type = "holdback:purchase"; // guarantee release isn't a new purchase
-      else if (h.status === "held" && was === undefined) type = h.kind === "buy" ? "holdback:purchase" : "holdback:hold";
+      if (h.status === "refunded") type = "holdback:refund";        // was charged, money returned
+      else if (h.status === "released") type = "holdback:release";   // authorization voided, never charged
+      else if (h.status === "captured") type = "holdback:purchase";
+      else if (h.status === "held" && was === undefined) type = "holdback:hold";
       if (!type) continue;
       const targets = [...mounts].filter(([, m]) => m.itemId === it.id).map(([el]) => el);
       const detail = { item: it, hold: h };
@@ -564,7 +570,7 @@
     new MutationObserver((recs) => { for (const r of recs) for (const n of r.addedNodes) if (n.nodeType === 1) { if (n.matches("[data-holdback-item]")) mount(n); scan(n); } })
       .observe(document.body, { childList: true, subtree: true });
     connect();
-    ensureBuyer().then(() => { fireEvents(); renderAll(); }).catch((e) => { lastErr = `Wallet setup failed: ${e.message}`; renderAll(); });
+    ensureBuyer().then(() => { fireEvents(); renderAll(); }).catch((e) => { lastErr = `Card setup failed: ${e.message}`; renderAll(); });
     setInterval(tick, 500);
   }
 

@@ -2,17 +2,16 @@
 //
 //   node demo/market/server.mts          (server + scripted buyer agents, http://localhost:4022)
 //
-// One seller agent sells NFTs. It picks the sales mechanism from demand (watchers, time,
+// One seller agent sells items. It picks the sales mechanism from demand (watchers, time,
 // goal), negotiates with a hidden floor, runs proxy and Dutch auctions, and every offer,
-// bid and purchase is an on-chain hold: captured with delivery when a deal clears,
-// refunded otherwise. Buyers (scripted agents, humans on the page, MCP clients) all go
-// through the same HTTP API.
+// bid and purchase is a payment hold (a card authorization): captured when a deal clears,
+// released otherwise. Buyers (scripted agents, humans on the page, MCP clients) all go
+// through the same HTTP API. Payments go through a HoldProvider (demo/market/payments.mts).
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Keypair, PublicKey } from "@solana/web3.js";
-import { Chain, holds, presets, chainError, type Policy } from "./chain.mts";
+import { FakeCardProvider, type HoldProvider } from "./payments.mts";
 import { chooseMechanism, settleAuction, dutchPrice } from "../mechanism.mts";
 import { sellerReply, sellerNote, type Goal } from "./negotiation.mts";
 import { createScenario } from "./scenario.mts";
@@ -26,11 +25,13 @@ const PUBLIC_DIR = fileURLToPath(new URL("../public/", import.meta.url));
 
 // ------------------------------------------------------------------ public types (demo/API.md)
 type Mechanism = "buy-now" | "offers" | "auction" | "dutch";
-type HoldStatus = "held" | "captured" | "refunded";
+type HoldStatus = "held" | "captured" | "released" | "refunded";   // released: authorization voided, never charged
 type Hold = {
   id: string; itemId: string; buyer: string; kind: "offer" | "bid" | "buy";
-  amount: number; captured?: number; status: HoldStatus; tx: string; settleTx?: string;
-  at: string; settledAt?: string;   // extensions: ISO times the hold was placed and settled
+  amount: number; captured?: number; refunded?: number; status: HoldStatus;
+  ref: string;                // payment processor reference (authorization id)
+  refundableUntil?: string;   // guarantee purchases: buyer can get a refund until then
+  at: string; settledAt?: string;
 };
 type Turn = {
   from: "buyer" | "seller"; buyer: string; amount: number;
@@ -44,26 +45,26 @@ type Item = {
   ask: number;
   price?: number;
   status: "listed" | "sold" | "unsold";
-  soldTo?: string; soldFor?: number; saleTx?: string;
+  soldTo?: string; soldFor?: number;
   watchers: string[];
   auction?: { endsAt: string; bids: number; leader?: string; reserveMet: boolean; price?: number; closed?: boolean };
   negotiations: Record<string, Turn[]>;
   holds: Hold[];
   // extensions
-  kind: "nft" | "digital" | "physical";   // digital / physical: no NFT, fixed price, guarantee hold
+  kind: "unique" | "digital" | "physical";   // unique: one of a kind, negotiable. digital / physical: fixed price + guarantee
   guarantee?: string;
   description?: string;
-  listing?: string;
-  nft?: string;
 };
-type Buyer = { id: string; name: string; kind: "human" | "agent" | "mcp"; max?: number; wallet: string; balance: number };
+type Buyer = {
+  id: string; name: string; kind: "human" | "agent" | "mcp"; max?: number;
+  card: string;      // payment method label
+  balance: number;   // available credit on that card (authorizations reserve it)
+};
 
 // ------------------------------------------------------------------ internal state
 type Lot = {
   item: Item;
-  floor: number;
-  listing?: PublicKey;
-  nft?: PublicKey;
+  floor: number;   // private to the seller agent; never sent to buyers
   listedAt: number;
   staleSecs: number;
   guaranteeSecs: number;                                    // digital / physical: how long the buyer can reclaim
@@ -75,15 +76,15 @@ type Lot = {
   endsAt?: number;
   settling?: boolean;
 };
-type HoldRec = { pub: Hold; payment: PublicKey; buyerId: string; lot: Lot; policy: "offer" | "bid" | "guarantee" };
-type BuyerRec = { pub: Buyer; kp: Keypair };
+type HoldRec = { pub: Hold; authId: string; buyerId: string; lot: Lot; policy: "offer" | "bid" | "guarantee"; refundableUntil?: number };
+type BuyerRec = { pub: Buyer; account: string };
 
-const chain = new Chain();
+const payments: HoldProvider & { merchantBalance?: number } = new FakeCardProvider();
 const lots: Lot[] = [];
 const lotById = new Map<string, Lot>();
 const buyers = new Map<string, BuyerRec>();
 const holdById = new Map<string, HoldRec>();
-const log: { t: string; who: string; text: string; tx?: string }[] = [];
+const log: { t: string; who: string; text: string }[] = [];
 let sellerBalance = 0;
 let scenario: ReturnType<typeof createScenario> | undefined;
 
@@ -95,25 +96,12 @@ const bad = (m: string) => new HttpError(400, m);
 
 // ------------------------------------------------------------------ live updates
 const clients = new Set<http.ServerResponse>();
-const RAILS_FILE = fileURLToPath(new URL("./rails.json", import.meta.url));
-function rails() {
-  const solana = {
-    id: "solana", name: "Solana", status: chain.cluster,
-    explorer: `https://explorer.solana.com/address/${chain.programId.toBase58()}?cluster=${chain.devnet ? "devnet" : "custom&customUrl=" + encodeURIComponent(chain.rpc)}`,
-    note: "holds, captureSale (NFT delivery vs payment), refunds and reclaims",
-  };
-  let extra: any[] = [];
-  try { const r = JSON.parse(fs.readFileSync(RAILS_FILE, "utf8")); if (Array.isArray(r)) extra = r.filter((x) => x?.id !== "solana"); } catch {}
-  return [solana, ...extra];
-}
 const snapshot = () => ({
-  cluster: chain.cluster,
-  rails: rails(),
-  program: chain.programId.toBase58(),
+  provider: { id: payments.id, name: payments.name, capabilities: payments.capabilities },
   items: lots.map((l) => l.item),
   buyers: [...buyers.values()].map((b) => b.pub),
   log,
-  seller: { name: "Seller agent", wallet: chain.seller.publicKey.toBase58(), balance: sellerBalance },
+  seller: { name: "Seller agent", balance: sellerBalance },
   scenario: scenario?.status(),
 });
 let pushTimer: NodeJS.Timeout | undefined;
@@ -125,14 +113,15 @@ function push() {
     for (const c of clients) c.write(msg);
   }, 40);
 }
-function say(who: string, text: string, sig?: string) {
-  log.unshift({ t: new Date().toISOString().slice(11, 19), who, text, tx: sig && chain.explorer(sig) });
+function say(who: string, text: string) {
+  log.unshift({ t: new Date().toISOString().slice(11, 19), who, text });
   if (log.length > 300) log.length = 300;
-  console.log(`${who.padEnd(13)} ${text}${sig ? "  " + sig.slice(0, 12) + "…" : ""}`);
+  console.log(`${who.padEnd(13)} ${text}`);
   push();
 }
+const errMsg = (e: any): string => e?.message ?? String(e);
 
-/** Every mutating step runs here, one at a time: chain order matches the story. */
+/** Every mutating step runs here, one at a time, so payment order matches the story. */
 let queue: Promise<unknown> = Promise.resolve();
 function locked<T>(fn: () => Promise<T>): Promise<T> {
   const run = queue.then(fn, fn);
@@ -141,8 +130,8 @@ function locked<T>(fn: () => Promise<T>): Promise<T> {
 }
 async function refreshBalances() {
   await Promise.all([
-    ...[...buyers.values()].map(async (b) => { try { b.pub.balance = await chain.balance(b.kp.publicKey); } catch {} }),
-    (async () => { try { sellerBalance = await chain.balance(chain.seller.publicKey); } catch {} })(),
+    ...[...buyers.values()].map(async (b) => { try { b.pub.balance = await payments.available(b.account); } catch {} }),
+    (async () => { sellerBalance = payments.merchantBalance ?? sellerBalance; })(),
   ]);
   push();
 }
@@ -162,7 +151,7 @@ function buyerOr400(id: unknown) {
 }
 function amountOr400(v: unknown, what = "amount") {
   const n = Number(v);
-  if (!Number.isFinite(n) || n <= 0) throw bad(`${what} must be a positive number of dUSDC`);
+  if (!Number.isFinite(n) || n <= 0) throw bad(`${what} must be a positive number of USD`);
   return Math.round(n * 100) / 100;
 }
 function listedOr400(lot: Lot) {
@@ -177,43 +166,45 @@ function turn(lot: Lot, t: Omit<Turn, "at">) {
   return full;
 }
 
-async function newHold(b: BuyerRec, lot: Lot, kind: Hold["kind"], amount: number, policy: Policy, pol: HoldRec["policy"]) {
-  if (b.pub.balance < amount) throw bad(`${b.pub.name} has ${b.pub.balance} dUSDC, not enough to hold ${amount}`);
-  let r;
-  try { r = await chain.hold(b.kp, policy, amount); } catch (e) { throw bad(`hold failed: ${chainError(e)}`); }
-  b.pub.balance -= amount;
-  const pub: Hold = { id: r.payment.toBase58(), itemId: lot.item.id, buyer: b.pub.name, kind, amount, status: "held", tx: chain.explorer(r.sig), at: new Date().toISOString() };
-  holdById.set(pub.id, { pub, payment: r.payment, buyerId: b.pub.id, lot, policy: pol });
+async function newHold(b: BuyerRec, lot: Lot, kind: Hold["kind"], amount: number, pol: HoldRec["policy"]) {
+  // The owner's limit is enforced here, on every hold, whatever the client checked.
+  if (b.pub.max !== undefined && amount > b.pub.max) throw bad(`${amount} USD is above ${b.pub.name}'s owner's limit of ${b.pub.max} USD`);
+  let auth;
+  try { auth = await payments.authorize(b.account, amount); } catch (e) { throw bad(`hold failed: ${errMsg(e)}`); }
+  const pub: Hold = { id: auth.id, itemId: lot.item.id, buyer: b.pub.name, kind, amount, status: "held", ref: auth.id, at: new Date().toISOString() };
+  const rec: HoldRec = { pub, authId: auth.id, buyerId: b.pub.id, lot, policy: pol };
+  holdById.set(pub.id, rec);
   lot.item.holds.push(pub);
+  b.pub.balance = await payments.available(b.account);
   const label = { offer: "offer", bid: "max bid", buy: "purchase" }[kind];
-  say(b.pub.name, `${label} ${amount} dUSDC on ${lot.item.name} → held in escrow${pol === "guarantee" ? ` (${lot.item.guarantee} guarantee)` : ""}`, r.sig);
-  return holdById.get(pub.id)!;
+  say(b.pub.name, `${label} ${amount} USD on ${lot.item.name} → card authorized${pol === "guarantee" ? "" : ", nothing charged until the deal clears"}`);
+  return rec;
 }
 
-/** Seller voids a hold: the buyer gets everything back. */
-async function voidHold(h: HoldRec, why: string) {
-  if (h.pub.status !== "held") return;
-  const sig = await chain.refund(h.payment);
-  h.pub.status = "refunded";
-  h.pub.settleTx = chain.explorer(sig);
+function settled(h: HoldRec, status: HoldStatus) {
+  h.pub.status = status;
   h.pub.settledAt = new Date().toISOString();
   if (h.lot.offers.get(h.buyerId) === h.pub.id) h.lot.offers.delete(h.buyerId);
-  say("Seller agent", `releases ${h.pub.buyer}'s ${h.pub.amount} dUSDC hold (${why})`, sig);
 }
 
-/** Delivery versus payment: NFT to the buyer, `price` to the seller, rest refunded, one tx. */
+/** Seller releases a hold: the authorization is voided and the buyer is never charged. */
+async function voidHold(h: HoldRec, why: string) {
+  if (h.pub.status !== "held") return;
+  await payments.void(h.authId);
+  settled(h, "released");
+  say("Seller agent", `releases ${h.pub.buyer}'s ${h.pub.amount} USD hold (${why})`);
+}
+
+/** Captures `price` from the winning hold (the rest of the authorization is released) and delivers the item. */
 async function sell(lot: Lot, h: HoldRec, price: number, othersWhy: string) {
   const b = buyers.get(h.buyerId)!;
-  const sig = await chain.captureSale(h.payment, lot.listing!, lot.nft!, b.kp.publicKey, price);
-  h.pub.status = "captured";
+  await payments.capture(h.authId, price);
+  settled(h, "captured");
   h.pub.captured = price;
-  h.pub.settleTx = chain.explorer(sig);
-  h.pub.settledAt = new Date().toISOString();
-  Object.assign(lot.item, { status: "sold", soldTo: b.pub.name, soldFor: price, saleTx: chain.explorer(sig), price: undefined });
+  Object.assign(lot.item, { status: "sold", soldTo: b.pub.name, soldFor: price, price: undefined });
   lot.dutch = undefined;
-  lot.offers.delete(h.buyerId);
   const back = h.pub.amount - price;
-  say("Seller agent", `SOLD ${lot.item.name} to ${b.pub.name} for ${price} dUSDC${back > 0 ? ` (held ${h.pub.amount}, ${back} refunded)` : ""}: NFT and payment swapped in one transaction`, sig);
+  say("Seller agent", `SOLD ${lot.item.name} to ${b.pub.name} for ${price} USD${back > 0 ? ` (held ${h.pub.amount}, captured ${price}, ${back} released)` : ""}`);
   for (const other of holdById.values()) {
     if (other.lot === lot && other.pub.status === "held" && other !== h) await voidHold(other, othersWhy);
   }
@@ -222,7 +213,7 @@ async function sell(lot: Lot, h: HoldRec, price: number, othersWhy: string) {
 // ------------------------------------------------------------------ seller agent: mechanism
 async function decide(lot: Lot, trigger: string, force = false) {
   const it = lot.item;
-  if (it.status !== "listed" || it.kind !== "nft") return;
+  if (it.status !== "listed" || it.kind !== "unique") return;
   if (it.mechanism === "auction" && it.auction && !it.auction.closed) {
     if (force) say("Seller agent", `${it.name}: auction running; goal "${it.goal}" applies after it closes`);
     return;
@@ -322,11 +313,11 @@ setInterval(() => {
     }
     if (it.mechanism === "buy-now" && lot.staleSecs > 0 && (Date.now() - lot.listedAt) / 1000 > lot.staleSecs && !lot.settling) {
       lot.settling = true;
-      locked(() => decide(lot, "no interest")).catch((e) => say("Market", `error: ${chainError(e)}`)).finally(() => (lot.settling = false));
+      locked(() => decide(lot, "no interest")).catch((e) => say("Market", `error: ${errMsg(e)}`)).finally(() => (lot.settling = false));
     }
     if (it.mechanism === "auction" && lot.endsAt && Date.now() >= lot.endsAt && !it.auction?.closed && !lot.settling) {
       lot.settling = true;
-      locked(() => closeAuction(lot)).catch((e) => say("Market", `auction settle error: ${chainError(e)}`)).finally(() => (lot.settling = false));
+      locked(() => closeAuction(lot)).catch((e) => say("Market", `auction settle error: ${errMsg(e)}`)).finally(() => (lot.settling = false));
     }
   }
 }, 500);
@@ -341,13 +332,13 @@ async function createBuyer(body: any): Promise<Buyer> {
   const pending = creating.get(name.toLowerCase());
   if (pending) return pending;
   const p = (async () => {
-    const kp = await chain.newWallet(BUYER_USD);
+    const card = await payments.createAccount(name, BUYER_USD);
     let id = slug(name);
     while (buyers.has(id)) id += "-x";
     const max = body?.max === undefined || body?.max === null ? undefined : amountOr400(body.max, "max");
-    const pub: Buyer = { id, name, kind, max, wallet: kp.publicKey.toBase58(), balance: BUYER_USD };
-    buyers.set(id, { pub, kp });
-    say("Market", `${name} (${kind}${max ? `, owner's limit ${max}` : ""}) joins with a demo wallet: ${BUYER_USD} dUSDC + SOL for fees`);
+    const pub: Buyer = { id, name, kind, max, card: card.label, balance: BUYER_USD };
+    buyers.set(id, { pub, account: card.id });
+    say("Market", `${name} (${kind}${max ? `, owner's limit ${max}` : ""}) joins with a ${card.label} (${BUYER_USD} USD available)`);
     return pub;
   })();
   creating.set(name.toLowerCase(), p);
@@ -368,17 +359,17 @@ async function offer(lot: Lot, body: any) {
   const b = buyerOr400(body?.buyerId);
   const amount = amountOr400(body?.amount);
   listedOr400(lot);
-  if (lot.item.kind !== "nft") throw bad(`${lot.item.name} is fixed price (${lot.item.ask}): use buy`);
+  if (lot.item.kind !== "unique") throw bad(`${lot.item.name} is fixed price (${lot.item.ask}): use buy`);
   await watch(lot, b);
   const it = lot.item;
   if (it.mechanism === "auction") throw bad(`${it.name} is in a proxy auction until ${it.auction?.endsAt}: place a bid instead`);
-  if (it.mechanism === "dutch") throw bad(`${it.name} is in a Dutch auction at ${it.price} dUSDC right now: use buy`);
+  if (it.mechanism === "dutch") throw bad(`${it.name} is in a Dutch auction at ${it.price} USD right now: use buy`);
   const prev = lot.offers.get(b.pub.id);
   if (prev) await voidHold(holdById.get(prev)!, "replaced by a new offer");
-  const h = await newHold(b, lot, "offer", amount, holds.offer(lot.listing!, 86400), "offer");
+  const h = await newHold(b, lot, "offer", amount, "offer");
   lot.offers.set(b.pub.id, h.pub.id);
   const said = buyerMessage(body);
-  turn(lot, { from: "buyer", buyer: b.pub.name, amount, action: "offer", message: said ?? `I offer ${amount} dUSDC (held in escrow).` });
+  turn(lot, { from: "buyer", buyer: b.pub.name, amount, action: "offer", message: said ?? `I offer ${amount} USD (held on my card).` });
   const round = turns(lot, b.pub.name).filter((t) => t.from === "buyer" && t.action === "offer").length;
   const r = sellerReply({ offer: amount, ask: it.ask, floor: lot.floor, goal: it.goal, round, lastCounter: lot.counters.get(b.pub.id), message: said, item: facts(it) });
   const reply = turn(lot, { from: "seller", buyer: b.pub.name, amount: r.amount, action: r.action, message: r.message, ...(r.read ? { read: r.read } : {}) });
@@ -400,13 +391,10 @@ async function respond(lot: Lot, body: any) {
   if (action === "walk_away") {
     const said = buyerMessage(body);
     turn(lot, { from: "buyer", buyer: b.pub.name, amount: prev?.pub.amount ?? 0, action: "walk_away", message: said ?? "I'll pass." });
-    if (prev) {
-      const sig = await chain.reclaim(b.kp, prev.payment);
-      prev.pub.status = "refunded";
-      prev.pub.settleTx = chain.explorer(sig);
-      prev.pub.settledAt = new Date().toISOString();
-      lot.offers.delete(b.pub.id);
-      say(b.pub.name, `walks away from ${it.name} and takes back the ${prev.pub.amount} dUSDC offer hold`, sig);
+    if (prev && prev.pub.status === "held") {
+      await payments.void(prev.authId);
+      settled(prev, "released");
+      say(b.pub.name, `walks away from ${it.name}; the ${prev.pub.amount} USD offer hold is released`);
     } else say(b.pub.name, `walks away from ${it.name}`);
     const standing = lot.counters.get(b.pub.id) ?? it.ask;
     const n = sellerNote(said, "walk_away", standing, facts(it));
@@ -417,7 +405,7 @@ async function respond(lot: Lot, body: any) {
   const price = lot.counters.get(b.pub.id);
   if (price === undefined) throw bad(`no counter-offer from the seller to accept yet: make an offer first`);
   if (prev) await voidHold(prev, "replaced by the accepted price");
-  const h = await newHold(b, lot, "offer", price, holds.offer(lot.listing!, 86400), "offer");
+  const h = await newHold(b, lot, "offer", price, "offer");
   const said = buyerMessage(body);
   turn(lot, { from: "buyer", buyer: b.pub.name, amount: price, action: "accept", message: said ?? `Deal at ${price}.` });
   const n = sellerNote(said, "accept", price, facts(it));
@@ -436,8 +424,7 @@ async function bid(lot: Lot, body: any) {
   if (Date.now() >= lot.endsAt!) throw bad("auction already closed");
   const prev = lot.bids.get(b.pub.id);
   if (prev && prev.max >= max) throw bad(`your max bid is already ${prev.max}: raise it to bid again`);
-  const deadline = Math.ceil((lot.endsAt! - Date.now()) / 1000) + 600;
-  const h = await newHold(b, lot, "bid", max, holds.bid(lot.listing!, deadline), "bid");
+  const h = await newHold(b, lot, "bid", max, "bid");
   if (prev) await voidHold(holdById.get(prev.holdId)!, "replaced by a higher max bid");
   lot.bids.set(b.pub.id, { max, holdId: h.pub.id });
   updateAuction(lot);
@@ -449,42 +436,49 @@ async function buy(lot: Lot, body: any) {
   const b = buyerOr400(body?.buyerId);
   listedOr400(lot);
   const it = lot.item;
-  if (it.kind !== "nft") {
-    const h = await newHold(b, lot, "buy", it.ask, presets.guarantee(lot.guaranteeSecs), "guarantee");
-    Object.assign(it, { status: "sold", soldTo: b.pub.name, soldFor: it.ask, saleTx: h.pub.tx });
+  if (it.kind !== "unique") {
+    // Guarantee on a card: captured now (an authorization would expire before the window ends);
+    // the merchant refunds on request inside the window.
+    const h = await newHold(b, lot, "buy", it.ask, "guarantee");
+    await payments.capture(h.authId, it.ask);
+    settled(h, "captured");
+    h.pub.captured = it.ask;
+    h.refundableUntil = Date.now() + lot.guaranteeSecs * 1000;
+    h.pub.refundableUntil = new Date(h.refundableUntil).toISOString();
+    Object.assign(it, { status: "sold", soldTo: b.pub.name, soldFor: it.ask });
     say("Seller agent", it.kind === "physical"
-      ? `ships ${it.name} to ${b.pub.name}. Payment stays in escrow for ${it.guarantee} unless ${b.pub.name} reclaims it (lost, damaged, not as described)`
-      : `delivers ${it.name} to ${b.pub.name}. Payment releases in ${it.guarantee} unless ${b.pub.name} reclaims it`);
+      ? `ships ${it.name} to ${b.pub.name}, charged ${it.ask} USD. Refundable for ${it.guarantee} (lost, damaged, not as described)`
+      : `delivers ${it.name} to ${b.pub.name}, charged ${it.ask} USD. Money back on request for ${it.guarantee}`);
     return { hold: h.pub, item: it };
   }
   if (it.mechanism === "auction") throw bad(`${it.name} is in a proxy auction: place a bid instead`);
   const price = it.mechanism === "dutch" ? it.price! : it.mechanism === "offers" ? it.ask : (it.price ?? it.ask);
-  const h = await newHold(b, lot, "buy", price, holds.bid(lot.listing!, 600), "bid");
+  const h = await newHold(b, lot, "buy", price, "bid");
   await sell(lot, h, price, `sold to ${b.pub.name}`);
   return { hold: h.pub, item: it };
 }
 
+/** Buyer takes money back: withdraws an offer (void), or asks for a refund inside a guarantee window. */
 async function reclaim(h: HoldRec, body: any) {
   const b = buyerOr400(body?.buyerId);
   if (h.buyerId !== b.pub.id) throw new HttpError(403, "not your hold");
-  if (h.pub.status !== "held") throw bad(`hold is already ${h.pub.status}`);
-  let sig: string;
-  try { sig = await chain.reclaim(b.kp, h.payment); } catch (e) {
-    throw bad(`cannot reclaim: ${chainError(e)}${h.policy === "bid" ? " (bids are binding until the auction deadline)" : ""}`);
-  }
-  h.pub.status = "refunded";
-  h.pub.settleTx = chain.explorer(sig);
-  h.pub.settledAt = new Date().toISOString();
   const lot = h.lot, it = lot.item;
-  if (lot.offers.get(b.pub.id) === h.pub.id) {
-    lot.offers.delete(b.pub.id);
-    turn(lot, { from: "buyer", buyer: b.pub.name, amount: h.pub.amount, action: "walk_away", message: "Withdrawing my offer." });
+  if (h.policy === "guarantee") {
+    if (h.pub.status !== "captured") throw bad(`payment is already ${h.pub.status}`);
+    if (Date.now() > h.refundableUntil!) throw bad(`the ${it.guarantee} guarantee ended ${h.pub.refundableUntil}`);
+    const r = await payments.refund(h.authId);
+    settled(h, "refunded");
+    h.pub.refunded = r.refunded;
+    if (it.soldTo === b.pub.name) Object.assign(it, { status: "listed", soldTo: undefined, soldFor: undefined });
+    say(b.pub.name, `gets ${r.refunded} USD back for ${it.name} inside the ${it.guarantee} guarantee, no seller approval needed`);
+    return { hold: h.pub };
   }
-  if (lot.bids.get(b.pub.id)?.holdId === h.pub.id) { lot.bids.delete(b.pub.id); updateAuction(lot); }
-  if (h.policy === "guarantee" && it.soldTo === b.pub.name) {
-    Object.assign(it, { status: "listed", soldTo: undefined, soldFor: undefined, saleTx: undefined });
-    say(b.pub.name, `reclaims ${h.pub.amount} dUSDC for ${it.name} inside the ${it.guarantee} guarantee, no seller approval needed`, sig);
-  } else say(b.pub.name, `reclaims ${h.pub.amount} dUSDC (${h.pub.kind} on ${it.name})`, sig);
+  if (h.pub.status !== "held") throw bad(`hold is already ${h.pub.status}`);
+  if (h.policy === "bid") throw bad("bids are binding until the auction closes");
+  await payments.void(h.authId);
+  settled(h, "released");
+  turn(lot, { from: "buyer", buyer: b.pub.name, amount: h.pub.amount, action: "walk_away", message: "Withdrawing my offer." });
+  say(b.pub.name, `withdraws the ${h.pub.amount} USD offer on ${it.name}; the hold is released`);
   return { hold: h.pub };
 }
 
@@ -494,7 +488,7 @@ async function listItem(body: any) {
   if (!name) throw bad("name required");
   const ask = amountOr400(body?.ask, "ask");
   const floor = body?.floor === undefined ? Math.round(ask * 0.6) : amountOr400(body.floor, "floor");
-  const kind: Item["kind"] = body?.kind === "digital" || body?.kind === "physical" ? body.kind : "nft";
+  const kind: Item["kind"] = body?.kind === "digital" || body?.kind === "physical" ? body.kind : "unique";
   const days = body?.guaranteeDays === undefined ? (kind === "physical" ? 14 : 7) : amountOr400(body.guaranteeDays, "guaranteeDays");
   const goal: Goal = body?.goal === "quick-sale" ? "quick-sale" : "best-price";
   let id = slug(name);
@@ -508,21 +502,18 @@ async function listItem(body: any) {
     openToOffers: body?.mechanism === "offers",
     offers: new Map(), counters: new Map(), bids: new Map(),
   };
-  if (kind !== "nft") {
+  if (kind !== "unique") {
     const guarantee = `${days} days`;
     const reason = kind === "physical"
-      ? `physical item, ships in a few days → fixed price; payment held in escrow until it arrives, ${guarantee} to reclaim`
+      ? `physical item, ships in a few days → fixed price; refundable for ${guarantee} if it arrives lost, damaged or not as described`
       : `digital download → fixed price with a ${days}-day money-back guarantee`;
     Object.assign(lot.item, { mechanism: "buy-now", price: ask, guarantee, reason, ...(body?.description ? { description: String(body.description).slice(0, 400) } : {}) });
     lots.push(lot); lotById.set(id, lot);
     say("Seller agent", `lists ${name}: BUY-NOW at ${ask}: ${lot.item.reason}`);
     return lot.item;
   }
-  const r = await chain.listNft(floor);
-  Object.assign(lot, { listing: r.listing, nft: r.nft, listedAt: Date.now() });
-  Object.assign(lot.item, { listing: r.listing.toBase58(), nft: r.nft.toBase58() });
   lots.push(lot); lotById.set(id, lot);
-  say("Seller agent", `lists ${name} (ask ${ask}, goal ${goal}): NFT moved into escrow, reserve hidden`, r.sig);
+  say("Seller agent", `lists ${name} (ask ${ask}, goal ${goal}); the floor stays private to the seller agent`);
   await decide(lot, "new listing");
   return lot.item;
 }
@@ -624,16 +615,14 @@ async function route(req: http.IncomingMessage, res: http.ServerResponse) {
 const server = http.createServer((req, res) => {
   route(req, res).catch((e) => {
     const status = e instanceof HttpError ? e.status : 400;
-    const msg = e instanceof HttpError ? e.message : chainError(e);
+    const msg = errMsg(e);
     if (!(e instanceof HttpError)) console.error(e);
     if (!res.headersSent) json(res, status, { error: msg });
   });
 });
 
 async function main() {
-  await chain.init();
-  say("Market", `cluster ${chain.cluster}, program ${chain.programId.toBase58().slice(0, 8)}…, dUSDC mint ${chain.dollar.toBase58().slice(0, 8)}…`);
-  await refreshBalances();
+  say("Market", `payments: ${payments.name}`);
   await new Promise<void>((r) => server.listen(PORT, r));
   console.log(`Holdback market on http://localhost:${PORT}`);
   scenario = createScenario({

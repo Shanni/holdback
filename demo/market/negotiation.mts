@@ -1,4 +1,4 @@
-// Negotiation brains for the Holdback market. Pure functions, no chain, no I/O.
+// Negotiation brains for the Holdback market. Pure functions, no I/O.
 //
 // Seller (server-side, floor hidden from buyers), per demo/API.md:
 //   offer >= ask (or >= the seller's last counter) -> accept
@@ -46,7 +46,7 @@ export type SellerReply = {
 //   question   -> the reply answers with item facts
 //   bundle / first_purchase -> tone only
 export type Intent = "hardship" | "enthusiasm" | "bundle" | "first_purchase" | "rude" | "question";
-export type ItemFacts = { name: string; kind?: "nft" | "digital"; guarantee?: string };
+export type ItemFacts = { name: string; kind?: "unique" | "digital" | "physical"; guarantee?: string };
 export type MessageRead = { intents: Intent[]; terms: Partial<Record<Intent, string>> };
 
 const RULES: [Intent, RegExp][] = [
@@ -84,13 +84,13 @@ function factLine(item: ItemFacts | undefined, term: string | undefined) {
   const name = item?.name ?? "this piece";
   const digital = item?.kind === "digital";
   const edition = digital ? `${name} is a digital download` : `${name} is a 1/1, the only edition there is`;
-  const escrow = digital ? "your payment stays held in escrow" : "the NFT is held in escrow and comes to you in the same transaction as payment";
+  const howPaid = digital ? "you're only charged once it's delivered" : "your card is only authorized until we agree, then charged the agreed price";
   const g = item?.guarantee ? ` and it comes with a ${item.guarantee} money-back guarantee` : "";
   const t = term ?? "";
-  if (/who|artist|creator/.test(t)) return `Good question: ${name} is from the gallery's own monkey series, ${digital ? "a digital download" : "a 1/1"}, and ${escrow}${g}.`;
-  if (/escrow|refund|authentic|provenance/.test(t)) return `On that: ${escrow}, and ${digital ? `${name} is a digital download` : `${name} is a 1/1`}${g}.`;
-  if (/guarantee/.test(t)) return item?.guarantee ? `${name} has a ${item.guarantee} money-back guarantee, and ${escrow}.` : `No guarantee on ${name}, but ${escrow}, and if we don't agree your hold comes straight back.`;
-  return `You asked about rarity: ${edition}, and ${escrow}${g}.`;
+  if (/who|artist|creator/.test(t)) return `Good question: ${name} is from the gallery's own monkey series, ${digital ? "a digital download" : "a 1/1"}, and ${howPaid}${g}.`;
+  if (/escrow|refund|authentic|provenance/.test(t)) return `On that: ${howPaid}, and ${digital ? `${name} is a digital download` : `${name} is a 1/1`}${g}.`;
+  if (/guarantee/.test(t)) return item?.guarantee ? `${name} has a ${item.guarantee} money-back guarantee, and ${howPaid}.` : `No guarantee on ${name}, but ${howPaid}, and if we don't agree your hold comes straight back.`;
+  return `You asked about rarity: ${edition}, and ${howPaid}${g}.`;
 }
 
 function hardshipPhrase(term: string | undefined) {
@@ -131,11 +131,11 @@ function ack(read: MessageRead, ctx: Ctx, item: ItemFacts | undefined, seed: num
     case "bundle":
       return pick(ctx === "accept"
         ? ["On the bundle: each piece clears on its own hold, so this one's done and the others are priced separately."]
-        : ["On a bundle: each piece settles in its own escrow hold, so I price them one at a time.", "No bundles from me, since every piece clears on its own hold, but I can work on this one."], seed);
+        : ["On a bundle: each piece settles on its own hold, so I price them one at a time.", "No bundles from me, since every piece clears on its own hold, but I can work on this one."], seed);
     case "first_purchase":
       return pick(ctx === "accept"
         ? ["Congrats on the first purchase.", "Welcome aboard, nice first buy."]
-        : ["Welcome! If we don't agree, your hold comes straight back.", "First time here? Nothing leaves your wallet unless we agree."], seed);
+        : ["Welcome! If we don't agree, your hold comes straight back.", "First time here? Nothing is charged unless we agree."], seed);
   }
 }
 
@@ -143,9 +143,9 @@ function ack(read: MessageRead, ctx: Ctx, item: ItemFacts | undefined, seed: num
 export function sellerNote(message: string | undefined, ctx: "accept" | "walk_away", amount: number, item?: ItemFacts): { message: string; read: Intent[] } {
   const read = readMessage(message);
   const a = ack(read, ctx, item, seedOf(String(message ?? "")));
-  const base = ctx === "accept" ? `Deal at ${amount} dUSDC. The NFT is yours.` : `No problem. ${amount} dUSDC stands if you change your mind.`;
+  const base = ctx === "accept" ? `Deal at ${amount} USD. It's yours.` : `No problem. ${amount} USD stands if you change your mind.`;
   if (!a) return { message: base, read: read.intents };
-  return { message: ctx === "accept" ? `${a} Deal at ${amount} dUSDC, the NFT is yours.` : `${a} ${amount} dUSDC stands if you change your mind.`, read: read.intents };
+  return { message: ctx === "accept" ? `${a} Deal at ${amount} USD, it's yours.` : `${a} ${amount} USD stands if you change your mind.`, read: read.intents };
 }
 
 export function sellerReply(i: SellerInput): SellerReply {
@@ -162,20 +162,20 @@ export function sellerReply(i: SellerInput): SellerReply {
     const price = standing;
     const extra = i.offer - price;
     const back = extra > 0 ? ` You offered ${i.offer}; the extra ${extra} goes back to you.` : "";
-    return { action: "accept", amount: price, message: say("accept", `Deal at ${price} dUSDC.${back}`, `Deal at ${price} dUSDC.${back}`), ...tag };
+    return { action: "accept", amount: price, message: say("accept", `Deal at ${price} USD.${back}`, `Deal at ${price} USD.${back}`), ...tag };
   }
   if (i.offer < i.floor) {
     return {
       action: "decline",
       amount: ask,
       message: say("decline", `${i.offer} is too low for me. Your hold is released. The asking price is ${ask}.`,
-        `${i.offer} doesn't work, so your hold is released; the asking price is ${ask} dUSDC.`),
+        `${i.offer} doesn't work, so your hold is released; the asking price is ${ask} USD.`),
       ...tag,
     };
   }
   // Close enough (within 3% of ask of the standing price): take it rather than haggle over crumbs.
   if (standing - i.offer <= Math.max(1, Math.round(ask * 0.03))) {
-    return { action: "accept", amount: i.offer, message: say("accept", `Close enough. Deal at ${i.offer} dUSDC.`, `Close enough: deal at ${i.offer} dUSDC.`), ...tag };
+    return { action: "accept", amount: i.offer, message: say("accept", `Close enough. Deal at ${i.offer} USD.`, `Close enough: deal at ${i.offer} USD.`), ...tag };
   }
   const c = CONCESSIONS[i.goal];
   const round = Math.max(1, Math.floor(i.round));
@@ -196,20 +196,20 @@ export function sellerReply(i: SellerInput): SellerReply {
   }
   amount = Math.min(amount, standing);
   if (amount <= i.offer) {
-    return { action: "accept", amount: i.offer, message: say("accept", `You have a deal at ${i.offer} dUSDC.`, `You have a deal at ${i.offer} dUSDC.`), ...tag };
+    return { action: "accept", amount: i.offer, message: say("accept", `You have a deal at ${i.offer} USD.`, `You have a deal at ${i.offer} USD.`), ...tag };
   }
   const plain = final
-    ? `Final offer: ${amount} dUSDC. I can't go lower.`
+    ? `Final offer: ${amount} USD. I can't go lower.`
     : i.goal === "quick-sale"
-      ? `I'd like to sell this quickly. I can do ${amount} dUSDC.`
+      ? `I'd like to sell this quickly. I can do ${amount} USD.`
       : round === 1
-        ? `It's worth more than ${i.offer}. I can do ${amount} dUSDC.`
-        : `Meeting you partway: ${amount} dUSDC.`;
+        ? `It's worth more than ${i.offer}. I can do ${amount} USD.`
+        : `Meeting you partway: ${amount} USD.`;
   const num = final
-    ? `Final offer: ${amount} dUSDC.`
+    ? `Final offer: ${amount} USD.`
     : rude
-      ? `It stays at ${amount} dUSDC.`
-      : pick([`I can do ${amount} dUSDC.`, `My counter is ${amount} dUSDC.`, `How about ${amount} dUSDC?`], seed >>> 3);
+      ? `It stays at ${amount} USD.`
+      : pick([`I can do ${amount} USD.`, `My counter is ${amount} USD.`, `How about ${amount} USD?`], seed >>> 3);
   return { action: "counter", amount, final: final || undefined, message: say("counter", plain, num), ...tag };
 }
 
@@ -233,7 +233,7 @@ export function buyerNext(i: BuyerInput): BuyerMove {
   const open = i.open ?? 0.55;
   if (i.lastOffer === undefined || !i.reply) {
     const amount = Math.max(1, Math.min(i.max, Math.round(i.ask * open)));
-    return { action: "offer", amount, message: `Would you take ${amount} dUSDC?` };
+    return { action: "offer", amount, message: `Would you take ${amount} USD?` };
   }
   if (i.reply.action === "accept") return { action: "done", message: "Deal." };
   if (i.reply.amount <= i.max) {
@@ -244,5 +244,5 @@ export function buyerNext(i: BuyerInput): BuyerMove {
   }
   const step = Math.max(1, Math.ceil((i.max - i.lastOffer) / 2));
   const amount = Math.min(i.max, i.reply.amount - 1, i.lastOffer + step);
-  return { action: "offer", amount, message: `I can stretch to ${amount} dUSDC.` };
+  return { action: "offer", amount, message: `I can stretch to ${amount} USD.` };
 }

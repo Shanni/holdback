@@ -1,5 +1,5 @@
-// Lists handmade items (no NFT) next to the monkey NFTs, so the demo store shows physical goods too.
-// Each one sells at a fixed price with the payment held in escrow while it ships (14 days to reclaim).
+// Lists handmade items next to the one-of-a-kind monkeys, so the demo store shows physical goods too.
+// Each one sells at a fixed price, charged at purchase and refundable for 14 days.
 //   node demo/market/seed-store.mts            (market at http://localhost:4022, or MARKET=…)
 const MARKET = process.env.MARKET ?? `http://localhost:${process.env.PORT ?? 4022}`;
 
